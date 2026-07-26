@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getCurrentUser, getUserProfile } from "@/lib/supabase/auth";
+import { getCurrentUser, getUserProfile } from "@/lib/supabase/auth.server";
 
 
 export default async function DashboardPage() {
@@ -12,22 +12,11 @@ export default async function DashboardPage() {
   }
 
 
-  const profile = await getUserProfile();
+  const profile = await getUserProfile(user.id);
 
 
   if (!profile) {
-    return (
-      <main className="p-10">
-        <h1 className="text-xl font-bold">
-          Profile not found
-        </h1>
-
-        <p>
-          Your authentication account exists,
-          but no StockFlow user profile exists.
-        </p>
-      </main>
-    );
+    redirect("/login");
   }
 
 
@@ -45,6 +34,5 @@ export default async function DashboardPage() {
     redirect("/dashboard/assistant");
   }
 
-
-  return null;
+  redirect("/login");
 }

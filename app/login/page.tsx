@@ -3,6 +3,7 @@
 import { useForm } from "react-hook-form";
 import { signIn } from "@/lib/supabase/auth";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 
 type LoginForm = {
@@ -12,6 +13,7 @@ type LoginForm = {
 
 
 export default function LoginPage() {
+  const router = useRouter();
 
   const {
     register,
@@ -35,8 +37,7 @@ export default function LoginPage() {
         data.password
       );
 
-
-      window.location.href = "/dashboard";
+      router.replace("/dashboard");
 
 
     } catch (err: any) {
