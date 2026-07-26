@@ -3,29 +3,7 @@ import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar";
 import { RecentActivityTable } from "@/components/dashboard/recent-activity-table";
 import { StatCard } from "@/components/dashboard/stat-card";
-
-const stats = [
-  {
-    label: "Total Shops",
-    value: "48",
-    delta: "+6 this month",
-  },
-  {
-    label: "Total Users",
-    value: "186",
-    delta: "+14 this week",
-  },
-  {
-    label: "Active Shops",
-    value: "44",
-    delta: "91.7% uptime",
-  },
-  {
-    label: "System Status",
-    value: "Healthy",
-    delta: "All services online",
-  },
-];
+import { getAdminDashboardMetrics } from "@/lib/dashboard/admin-data";
 
 const recentActivity = [
   {
@@ -55,13 +33,39 @@ const recentActivity = [
 ];
 
 export default async function AdminDashboard() {
-  const user = await getCurrentUser();
+  const [user, metrics] = await Promise.all([
+    getCurrentUser(),
+    getAdminDashboardMetrics(),
+  ]);
 
   const displayName =
     user?.email?.split("@")[0]?.replace(/[._-]/g, " ") ??
     "Super Admin";
 
   const displayEmail = user?.email ?? "admin@stockflow.app";
+
+  const stats = [
+    {
+      label: "Total Shops",
+      value: metrics.totalShops.toString(),
+      delta: "All registered shops",
+    },
+    {
+      label: "Total Users",
+      value: metrics.totalUsers.toString(),
+      delta: "All application users",
+    },
+    {
+      label: "Active Shops",
+      value: metrics.activeShops.toString(),
+      delta: "Shops with ACTIVE status",
+    },
+    {
+      label: "System Status",
+      value: metrics.systemStatus,
+      delta: metrics.systemDelta,
+    },
+  ];
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
