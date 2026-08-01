@@ -1,38 +1,14 @@
 import { redirect } from "next/navigation";
-import { getCurrentUser, getUserProfile } from "@/lib/supabase/auth.server";
 
+import { requireSession } from "@/lib/auth/guards";
+import { dashboardPathForRole } from "@/lib/auth/roles";
 
+/**
+ * /dashboard is a router, not a page. It resolves the signed-in user's role and
+ * forwards to the matching dashboard.
+ */
 export default async function DashboardPage() {
+  const profile = await requireSession();
 
-  const user = await getCurrentUser();
-
-
-  if (!user) {
-    redirect("/login");
-  }
-
-
-  const profile = await getUserProfile(user.id);
-
-
-  if (!profile) {
-    redirect("/login");
-  }
-
-
-  if (profile.role === "SUPER_ADMIN") {
-    redirect("/dashboard/admin");
-  }
-
-
-  if (profile.role === "OWNER") {
-    redirect("/dashboard/owner");
-  }
-
-
-  if (profile.role === "ASSISTANT") {
-    redirect("/dashboard/assistant");
-  }
-
-  redirect("/login");
+  redirect(dashboardPathForRole(profile.role));
 }

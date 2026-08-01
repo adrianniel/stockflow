@@ -643,7 +643,188 @@ Used for:
 
 ---
 
+# Migrations 008-016 — Application Development Phase
+
+Migrations 001-007 were applied through the Supabase dashboard. From 008 onward
+they are version-controlled SQL files under `supabase/migrations/`, named by
+timestamp so they apply in order.
+
+| No. | File | Summary |
+| --- | --- | --- |
+| 008 | `20260801120000_baseline_schema.sql` | Baseline of everything above, re-expressed as a file |
+| 009 | `20260801120100_pin_function_search_path.sql` | Pins `search_path` on the RLS helper functions |
+| 010 | `20260801120200_allow_discounts_and_partial_payments.sql` | Allows losses; adds `sales.amount_paid` |
+| 011 | `20260801120300_integrity_constraints.sql` | Unique `users.auth_id`, FIFO and lookup indexes |
+| 012 | `20260801120400_super_admin_metrics_only.sql` | Removes SUPER_ADMIN access to business data |
+| 013 | `20260801120500_shop_default_interest.sql` | Adds `shops.default_interest_percentage` |
+| 014 | `20260801120600_record_sale_fifo.sql` | `record_sale()` — atomic FIFO checkout |
+| 015 | `20260801120700_account_provisioning.sql` | Assistant accounts, status, privilege tightening |
+| 016 | `20260801120800_shop_status_is_platform_only.sql` | Shop suspension restricted to SUPER_ADMIN |
+
+Each file carries its own reasoning in a header comment. The entries below cover
+the ones that changed security or business rules rather than schema shape.
+
+---
+
+# Migration 009 — Pin Function Search Path
+
+## Purpose
+
+The three RLS helper functions are `SECURITY DEFINER`, so they run with the
+privileges of their owner. Without a pinned `search_path`, the tables they
+reference resolve against the *caller's* search path, and a caller who can
+create objects could shadow `public.users` with their own table and make
+`is_super_admin()` return true.
+
+## Changes Implemented
+
+`SET search_path = ''` on `get_user_shop_id()`, `get_user_role()`, and
+`is_super_admin()`, with every reference inside them schema-qualified.
+
+---
+
+# Migration 010 — Allow Discounts and Partial Payments
+
+## Purpose
+
+SRS 10 requires manual price adjustment at the point of sale. The schema
+forbade the consequence of it.
+
+## Changes Implemented
+
+Dropped `sale_items.profit >= 0` and `sales.total_profit >= 0`. A shop that
+discounts a slow-moving part below capital price has taken a real loss, and the
+system must record that honestly; reports surface it rather than a CHECK
+refusing the transaction.
+
+Added `sales.amount_paid`, with a constraint keeping it consistent with
+`payment_status` — so a sale cannot be PAID with nothing paid, or CREDIT with
+the full amount paid.
+
+`total_amount >= 0` was kept. A negative total would mean a refund, which is a
+different transaction type and out of MVP scope.
+
+---
+
+# Migration 012 — Restrict SUPER_ADMIN to Platform Administration
+
+## Purpose
+
+SRS 5.1 states the platform administrator manages shops and accounts and cannot
+access business data. The deployed policies said otherwise: every business table
+carried `OR is_super_admin()`.
+
+## Reason
+
+These are independent businesses whose purchase prices and margins are
+commercially sensitive, and nothing in the product requires the operator to see
+them. Removing the access also bounds the damage a compromised admin account can
+do — it can suspend a shop, but it cannot exfiltrate what every shop pays its
+suppliers.
+
+## Changes Implemented
+
+Removed the super-admin bypass from `categories`, `products`, `stock_batches`,
+`sales`, `sale_items`, and `stock_adjustments`. Access to `shops` and `users` is
+unchanged, since administering those is the whole of the role.
+
+Consequence: a person who is both the platform operator and a shop owner needs
+two accounts. The roles are deliberately not additive.
+
+---
+
+# Migration 014 — Atomic FIFO Checkout
+
+## Purpose
+
+Recording a sale touches several tables and must not be interleaved with another
+sale of the same stock.
+
+## Changes Implemented
+
+`record_sale(p_items jsonb, p_payment_status text, p_amount_paid numeric)`, a
+`SECURITY DEFINER` function that walks batches oldest-first, locks each with
+`SELECT ... FOR UPDATE`, deducts quantities, and writes `sales` and `sale_items`
+in one transaction.
+
+It takes no shop id: the shop and the acting user are resolved from `auth.uid()`
+inside the function, so a caller cannot record a sale against another shop.
+
+Prices and profit are computed server-side from the locked batch rows. The
+client submits only product ids, quantities, and any manual price override —
+a line spanning two batches at different capital prices has a profit the browser
+cannot compute correctly.
+
+---
+
+# Migration 015 — Account Provisioning
+
+## Purpose
+
+Let an owner create assistant logins from the application, and give the shop a
+way to free an assistant slot.
+
+## Changes Implemented
+
+Added `users.email` — a display copy of the sign-in address, so an owner's team
+list can show which login each row belongs to. `auth.users` stays authoritative;
+reading it requires the admin API.
+
+Added `users.status` (ACTIVE / INACTIVE). Deactivated users keep their history
+and their auth account but are refused at the route guards.
+
+Narrowed the INSERT policy on `users`. The baseline let an OWNER insert any row
+whose `shop_id` matched their own — including one with role `SUPER_ADMIN`, so an
+owner could mint themselves a platform-administrator account. It now forces
+`role = 'ASSISTANT'`.
+
+Added `WITH CHECK` to the UPDATE policy on `users`. A USING-only policy tests the
+row as it was, never as it becomes, so an owner could move a user into another
+shop or promote an assistant to SUPER_ADMIN. Both are now checked on the
+resulting row.
+
+Added the `enforce_assistant_limit` trigger. The two-assistant cap (SRS 5.3) was
+previously a UI rule only. The trigger locks the shop row first, so two
+simultaneous inserts cannot both pass the count.
+
+## Reason for Deactivation Rather Than Deletion
+
+`DELETE` on `users` is super-admin only, and deleting a profile would blank
+`sales.sold_by` (ON DELETE SET NULL), losing the record of who sold what.
+Deactivation keeps the row and the history while freeing the slot.
+
+---
+
+# Migration 016 — Shop Suspension Is Platform-Only
+
+## Purpose
+
+Once the route guards began refusing every member of an INACTIVE shop,
+`shops.status` became a lockout switch — and the UPDATE policy on `shops` lets an
+owner write their own shop row.
+
+## Changes Implemented
+
+The `enforce_shop_status_is_platform_only` trigger refuses any change to
+`shops.status` unless the caller is a SUPER_ADMIN. Owners keep the ability to
+edit the rest of their shop row.
+
+A trigger rather than `WITH CHECK` because the rule is "this value must not
+change", which needs both the old and the new row; a `WITH CHECK` expression
+only sees the new one.
+
+## Reason
+
+An owner who set their own shop to INACTIVE would lock their entire team out
+with no way to undo it, since reactivating requires a SUPER_ADMIN. Suspension is
+a platform decision (SRS 5.1).
+
+---
+
 # RLS Permission Structure
+
+Note: this section describes the structure as of Migration 012, which narrowed
+SUPER_ADMIN considerably. See that entry for the reasoning.
 
 ## SUPER_ADMIN
 
@@ -653,9 +834,14 @@ Permissions:
 
 - Access all shops
 - Manage all users
-- View all inventory
-- View all sales
-- Manage the entire platform
+- Suspend and restore shops
+- View platform-wide counts of shops and accounts
+
+Restrictions:
+
+- Cannot read or write any business data — products, inventory, sales,
+  purchase prices, or profit — in any shop
+- Cannot operate a shop; that requires a separate OWNER account
 
 ---
 
@@ -700,21 +886,23 @@ Restrictions:
 # Current Database Version
 
 ```
-StockFlow Database MVP v1.0
+StockFlow Database v1.1
 ```
 
 Status:
 
 ```
-COMPLETED
+COMPLETED — migrations 001-016 applied
 ```
 
-The database is ready for:
+Supports:
 
-- Next.js integration
-- Supabase client setup
-- Authentication development
-- Frontend implementation
+- Multi-tenant shop isolation through RLS
+- Batch-based inventory with FIFO deduction
+- Atomic sale recording with server-side profit calculation
+- Discounts below capital price, and partial or credit payments
+- Account provisioning for owners and assistants
+- Account and shop suspension
 
 ---
 
@@ -735,5 +923,5 @@ All future database changes must:
 Current Version:
 
 ```
-StockFlow MVP Database v1.0
+StockFlow Database v1.1
 ```

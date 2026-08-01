@@ -2,17 +2,23 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+
 import { LogoutButton } from "@/components/dashboard/logout-button";
+import type { NavItem } from "@/lib/auth/roles";
 
-const navigation = [
-  { label: "Dashboard", href: "/dashboard/admin" },
-  { label: "Shops", href: "/dashboard/admin#shops" },
-  { label: "Users", href: "/dashboard/admin#users" },
-  { label: "Reports", href: "/dashboard/admin#reports" },
-  { label: "Settings", href: "/dashboard/admin#settings" },
-];
+type DashboardSidebarProps = {
+  items: NavItem[];
+};
 
-export function DashboardSidebar() {
+/**
+ * Treats a nav item as active on its own path and on anything nested under it,
+ * so /dashboard/products/new keeps "Products" highlighted.
+ */
+function isActive(pathname: string, href: string): boolean {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+export function DashboardSidebar({ items }: DashboardSidebarProps) {
   const pathname = usePathname();
 
   return (
@@ -30,14 +36,15 @@ export function DashboardSidebar() {
         </div>
       </div>
 
-      <nav className="mt-6 space-y-1">
-        {navigation.map((item) => {
-          const active = pathname === item.href;
+      <nav aria-label="Dashboard" className="mt-6 space-y-1 overflow-y-auto">
+        {items.map((item) => {
+          const active = isActive(pathname, item.href);
 
           return (
             <Link
               key={item.href}
               href={item.href}
+              aria-current={active ? "page" : undefined}
               className={`flex items-center rounded-2xl px-4 py-3 text-sm font-medium transition ${
                 active
                   ? "bg-slate-950 text-white shadow-sm"

@@ -1,11 +1,12 @@
 import { Badge } from "@/components/ui/badge";
+import { roleLabel, type UserRole } from "@/lib/auth/roles";
 
 type DashboardHeaderProps = {
   title: string;
   subtitle: string;
   userName: string;
   userEmail: string;
-  role: string;
+  role: UserRole;
 };
 
 export function DashboardHeader({
@@ -19,7 +20,9 @@ export function DashboardHeader({
     <header className="rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur md:p-6">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-sm font-medium text-slate-500">SUPER_ADMIN</p>
+          <p className="text-sm font-medium text-slate-500">
+            {roleLabel(role)}
+          </p>
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-semibold tracking-tight text-slate-950 md:text-3xl">
               {title}

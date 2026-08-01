@@ -1,11 +1,23 @@
 import { createBrowserClient } from "@supabase/ssr";
 
-const supabaseUrl =
-  process.env.NEXT_PUBLIC_SUPABASE_URL ??
-  "https://awxphxckzcqxmcgixefk.supabase.co";
+import { supabasePublishableKey, supabaseUrl } from "./env";
 
-const supabaseAnonKey =
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF3eHBoeGNremNxeG1jZ2l4ZWZrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5OTYxNDgsImV4cCI6MjEwMDU3MjE0OH0.F5e6hZPOFruLo3wzPD4WQlLJ8NTV9dPh143bcCCNhfM";
+/**
+ * The browser Supabase client.
+ *
+ * Created on first use rather than at import time so that importing this module
+ * during a build — which Next.js does when it compiles any client component
+ * that reaches auth — does not require the environment to be configured. The
+ * instance is cached, because @supabase/ssr expects one client per browser
+ * context: a second one would keep its own copy of the session and the two
+ * would drift after a token refresh.
+ */
+let browserClient: ReturnType<typeof createBrowserClient> | null = null;
 
-export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey);
+export function getSupabaseBrowserClient() {
+  if (!browserClient) {
+    browserClient = createBrowserClient(supabaseUrl(), supabasePublishableKey());
+  }
+
+  return browserClient;
+}

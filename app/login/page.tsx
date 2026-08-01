@@ -1,141 +1,54 @@
-"use client";
+import { LoginForm } from "./login-form";
 
-import { useForm } from "react-hook-form";
-import { signIn } from "@/lib/supabase/auth";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-
-
-type LoginForm = {
-  email: string;
-  password: string;
+/**
+ * The `blocked` parameter is set by the route guards (lib/auth/guards.ts) when a
+ * session is valid to Supabase but refused by the app. Kept as a server
+ * component so the notice is in the first HTML response rather than appearing
+ * after hydration.
+ */
+type LoginPageProps = {
+  searchParams: Promise<{ blocked?: string }>;
 };
 
+const NOTICES: Record<string, string> = {
+  account:
+    "This account has been deactivated. Ask the shop owner to reactivate it, or sign in with a different account.",
+  shop: "This shop is currently inactive. Contact StockFlow support to have it reactivated.",
+};
 
-export default function LoginPage() {
-  const router = useRouter();
-
-  const {
-    register,
-    handleSubmit,
-  } = useForm<LoginForm>();
-
-
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-
-
-  async function onSubmit(data: LoginForm) {
-
-    try {
-
-      setLoading(true);
-      setError("");
-
-      await signIn(
-        data.email,
-        data.password
-      );
-
-      router.replace("/dashboard");
-
-
-    } catch (err: any) {
-
-      setError(
-        err.message || "Login failed"
-      );
-
-    } finally {
-
-      setLoading(false);
-
-    }
-  }
-
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const { blocked } = await searchParams;
+  const notice = blocked ? NOTICES[blocked] : undefined;
 
   return (
-
-    <main className="min-h-screen flex items-center justify-center bg-gray-100">
-
-      <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-md">
-
-
-        <h1 className="text-3xl font-bold text-center">
-          StockFlow
-        </h1>
-
-
-        <p className="text-center text-gray-500 mt-2">
-          Inventory & Sales Management
-        </p>
-
-
-        <form
-          onSubmit={handleSubmit(onSubmit)}
-          className="mt-8 space-y-4"
-        >
-
-
-          <div>
-
-            <label className="block mb-1">
-              Email
-            </label>
-
-            <input
-              type="email"
-              className="w-full border rounded-lg p-2"
-              {...register("email")}
-            />
-
+    <main className="flex min-h-screen items-center justify-center bg-slate-100 p-4 text-slate-950">
+      <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white/90 p-8 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur">
+        <div className="flex flex-col items-center gap-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-sm font-semibold text-white">
+            SF
           </div>
 
-
-
-          <div>
-
-            <label className="block mb-1">
-              Password
-            </label>
-
-            <input
-              type="password"
-              className="w-full border rounded-lg p-2"
-              {...register("password")}
-            />
-
-          </div>
-
-
-
-          {error && (
-
-            <p className="text-red-600 text-sm">
-              {error}
+          <div className="text-center">
+            <h1 className="text-2xl font-semibold tracking-tight">StockFlow</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Inventory and sales management
             </p>
+          </div>
+        </div>
 
-          )}
-
-
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-black text-white py-2 rounded-lg"
+        {notice ? (
+          <p
+            role="alert"
+            className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
           >
+            {notice}
+          </p>
+        ) : null}
 
-            {loading ? "Signing in..." : "Sign In"}
-
-          </button>
-
-
-        </form>
-
-
+        <LoginForm
+          blocked={blocked === "account" || blocked === "shop" ? blocked : undefined}
+        />
       </div>
-
     </main>
-
   );
 }
