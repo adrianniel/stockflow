@@ -183,12 +183,12 @@ export function SaleComposer({ products }: { products: InventoryLine[] }) {
         />
 
         <div className="flex flex-col gap-5">
-          <div className="flex items-end justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
                 Estimated total
               </p>
-              <p className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">
+              <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
                 {formatCurrency(estimatedTotal)}
               </p>
             </div>

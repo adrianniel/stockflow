@@ -62,9 +62,12 @@ export function Modal({
           onClose();
         }
       }}
-      className="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-3xl border border-slate-200 bg-white p-0 text-slate-950 shadow-[0_30px_80px_rgba(15,23,42,0.25)] backdrop:bg-slate-950/40 backdrop:backdrop-blur-sm"
+      // The height cap plus inner scroll is what makes this usable on a phone:
+      // a form taller than the screen scrolls inside the dialog instead of
+      // running off the bottom with its footer buttons out of reach.
+      className="m-auto max-h-[calc(100dvh-2rem)] w-[min(32rem,calc(100vw-2rem))] overflow-y-auto rounded-3xl border border-slate-200 bg-white p-0 text-slate-950 shadow-[0_30px_80px_rgba(15,23,42,0.25)] backdrop:bg-slate-950/40 backdrop:backdrop-blur-sm"
     >
-      <div className="p-6">
+      <div className="p-5 sm:p-6">
         <div className="mb-5">
           <h2
             id="modal-title"

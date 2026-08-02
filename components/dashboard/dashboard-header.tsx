@@ -47,8 +47,8 @@ export function DashboardHeader({
           </p>
         </div>
 
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-950 text-sm font-semibold text-white">
+        <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-950 text-sm font-semibold text-white">
             {userName
               .split(" ")
               .map((part) => part[0])
@@ -57,9 +57,11 @@ export function DashboardHeader({
               .toUpperCase()}
           </div>
 
-          <div>
-            <p className="text-sm font-medium text-slate-950">{userName}</p>
-            <p className="text-xs text-slate-500">{userEmail}</p>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-slate-950">
+              {userName}
+            </p>
+            <p className="truncate text-xs text-slate-500">{userEmail}</p>
           </div>
         </div>
       </div>

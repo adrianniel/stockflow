@@ -54,7 +54,12 @@ export default async function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-950">
-      <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col gap-6 p-4 md:flex-row md:p-6 lg:p-8">
+      {/*
+        No top padding below `md`: the sidebar's mobile bar is sticky and sits
+        flush against the top edge, the way an app header does. From `md` up the
+        bar is gone and the usual padding applies on all sides.
+      */}
+      <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col gap-6 px-4 pb-4 md:flex-row md:p-6 lg:p-8">
         <DashboardSidebar
           items={navigationForRole(profile.role)}
           profile={profile}
