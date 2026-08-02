@@ -28,6 +28,7 @@ export default async function UsersPage() {
         userName={displayName}
         userEmail={displayEmail}
         role={profile.role}
+        shopName={profile.shop_name}
       />
 
       <Panel>

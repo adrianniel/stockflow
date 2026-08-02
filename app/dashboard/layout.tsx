@@ -1,8 +1,39 @@
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar";
 import { requireSession } from "@/lib/auth/guards";
 import { navigationForRole } from "@/lib/auth/roles";
+import { getCurrentUser, getUserProfile } from "@/lib/supabase/auth.server";
+
+/**
+ * Puts the shop's name in the browser tab, so a tab reads "Sales | Kang Auto
+ * Supply" rather than the product name. Falls back to the root layout's
+ * "%s | StockFlow" for SUPER_ADMIN, which belongs to no shop.
+ *
+ * This reads the session rather than receiving it as a prop because Next.js
+ * calls generateMetadata separately from the component render. Both calls land
+ * in the same request, and getCurrentUser/getUserProfile are per-request cached,
+ * so this adds no extra query. It deliberately does not call requireSession():
+ * redirecting from metadata generation is not a thing, so an unauthenticated
+ * request just falls through to the default and the layout below does the
+ * redirecting.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const user = await getCurrentUser().catch(() => null);
+  const profile = user ? await getUserProfile(user.id).catch(() => null) : null;
+
+  if (!profile?.shop_name) {
+    return {};
+  }
+
+  return {
+    title: {
+      default: profile.shop_name,
+      template: `%s | ${profile.shop_name}`,
+    },
+  };
+}
 
 /**
  * Shared chrome for every /dashboard page.
@@ -24,7 +55,10 @@ export default async function DashboardLayout({
   return (
     <div className="min-h-screen bg-slate-100 text-slate-950">
       <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col gap-6 p-4 md:flex-row md:p-6 lg:p-8">
-        <DashboardSidebar items={navigationForRole(profile.role)} />
+        <DashboardSidebar
+          items={navigationForRole(profile.role)}
+          profile={profile}
+        />
 
         <main className="flex min-w-0 flex-1 flex-col gap-6">{children}</main>
       </div>

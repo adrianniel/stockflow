@@ -37,6 +37,7 @@ export default async function SettingsPage() {
         userName={displayName}
         userEmail={displayEmail}
         role={profile.role}
+        shopName={profile.shop_name}
       />
 
       {shop ? (

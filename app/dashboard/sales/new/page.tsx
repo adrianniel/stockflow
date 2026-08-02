@@ -34,6 +34,7 @@ export default async function NewSalePage() {
         userName={displayName}
         userEmail={displayEmail}
         role={profile.role}
+        shopName={profile.shop_name}
       />
 
       <div className="flex justify-end">

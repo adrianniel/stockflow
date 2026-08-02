@@ -135,6 +135,7 @@ export default async function OwnerDashboard() {
         userName={displayName}
         userEmail={displayEmail}
         role={profile.role}
+        shopName={profile.shop_name}
       />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

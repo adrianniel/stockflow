@@ -7,6 +7,12 @@ type DashboardHeaderProps = {
   userName: string;
   userEmail: string;
   role: UserRole;
+  /**
+   * The signed-in user's shop. Leads the eyebrow so an owner or assistant sees
+   * their own store named on every page. Null for SUPER_ADMIN, which belongs to
+   * no shop and shows the role alone.
+   */
+  shopName?: string | null;
 };
 
 export function DashboardHeader({
@@ -15,12 +21,19 @@ export function DashboardHeader({
   userName,
   userEmail,
   role,
+  shopName,
 }: DashboardHeaderProps) {
   return (
     <header className="rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur md:p-6">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="text-sm font-medium text-slate-500">
+            {shopName ? (
+              <>
+                <span className="text-slate-900">{shopName}</span>
+                <span className="px-2 text-slate-300">·</span>
+              </>
+            ) : null}
             {roleLabel(role)}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-3">

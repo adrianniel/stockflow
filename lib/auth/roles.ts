@@ -21,6 +21,13 @@ export type SessionProfile = {
   status: UserStatus;
   /** The shop's own status. Null for SUPER_ADMIN, which has no shop. */
   shop_status: UserStatus | null;
+  /**
+   * The shop's display name, shown as the dashboard's identity so an owner or
+   * assistant sees their own store rather than a generic product. Null for
+   * SUPER_ADMIN, which belongs to no shop — those screens fall back to
+   * StockFlow's own branding.
+   */
+  shop_name: string | null;
 };
 
 export function isUserRole(value: unknown): value is UserRole {

@@ -32,6 +32,7 @@ export default async function AssistantsPage() {
         userName={displayName}
         userEmail={displayEmail}
         role={profile.role}
+        shopName={profile.shop_name}
       />
 
       <Panel>

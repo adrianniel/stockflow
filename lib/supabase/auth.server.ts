@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 import { isAuthSessionMissingError } from "@supabase/supabase-js";
 
 import type { SessionProfile } from "@/lib/auth/roles";
@@ -16,8 +18,15 @@ import { createSupabaseServerClient } from "./server";
  * Anything else is still thrown: an unreachable Supabase or a malformed token
  * is a real fault, and silently reporting it as "signed out" would turn an
  * outage into a confusing redirect loop through the login page.
+ *
+ * Wrapped in React's cache() so it runs once per request rather than once per
+ * caller. A single dashboard page load asks for the session from the layout's
+ * requireSession(), the page's own requireRole(), getDashboardIdentity(), and
+ * generateMetadata() — four round trips to Supabase for an answer that cannot
+ * change within one request. The cache is per-request, so a fresh sign-in or a
+ * revalidation still sees current data.
  */
-export async function getCurrentUser() {
+export const getCurrentUser = cache(async function getCurrentUser() {
   const supabase = await createSupabaseServerClient();
 
   const {
@@ -34,7 +43,7 @@ export async function getCurrentUser() {
   }
 
   return user;
-}
+});
 
 /**
  * Loads the `users` row backing an auth account.
@@ -44,7 +53,7 @@ export async function getCurrentUser() {
  * from under a live session), and callers handle `null` by redirecting to
  * /login. `single()` would throw instead and surface as a 500.
  */
-export async function getUserProfile(
+export const getUserProfile = cache(async function getUserProfile(
   authId: string,
 ): Promise<SessionProfile | null> {
   const supabase = await createSupabaseServerClient();
@@ -57,7 +66,7 @@ export async function getUserProfile(
       role,
       shop_id,
       status,
-      shops ( status )
+      shops ( shop_name, status )
     `)
     .eq("auth_id", authId)
     .maybeSingle();
@@ -83,8 +92,9 @@ export async function getUserProfile(
     shop_id: row.shop_id,
     status: row.status,
     shop_status: shop?.status ?? null,
+    shop_name: shop?.shop_name ?? null,
   };
-}
+});
 
 type ProfileRow = {
   id: string;
@@ -92,5 +102,11 @@ type ProfileRow = {
   role: SessionProfile["role"];
   shop_id: string | null;
   status: SessionProfile["status"];
-  shops: { status: SessionProfile["status"] } | Array<{ status: SessionProfile["status"] }> | null;
+  shops: {
+    shop_name: string | null;
+    status: SessionProfile["status"];
+  } | Array<{
+    shop_name: string | null;
+    status: SessionProfile["status"];
+  }> | null;
 };

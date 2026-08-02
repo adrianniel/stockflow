@@ -85,6 +85,7 @@ export default async function AdjustmentsPage() {
         userName={displayName}
         userEmail={displayEmail}
         role={profile.role}
+        shopName={profile.shop_name}
       />
 
       <Panel>
