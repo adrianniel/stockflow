@@ -29,6 +29,18 @@ ALTER TABLE public.sales
 ALTER TABLE public.sales
     ADD COLUMN IF NOT EXISTS amount_paid numeric NOT NULL DEFAULT 0;
 
+-- Backfill existing rows before adding the check below. Without this, any sale
+-- already recorded as PAID (amount_paid would default to 0) would violate
+-- sales_payment_status_amount_check and abort the migration. A sale that was
+-- settled when it was made stays settled.
+UPDATE public.sales
+   SET amount_paid = total_amount
+ WHERE payment_status = 'PAID';
+
+UPDATE public.sales
+   SET amount_paid = 0
+ WHERE payment_status = 'CREDIT';
+
 ALTER TABLE public.sales
     DROP CONSTRAINT IF EXISTS sales_amount_paid_check;
 

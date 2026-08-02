@@ -35,32 +35,51 @@ npm run dev
 
 ## 2. Apply the pending migrations — required before anything works
 
-Two migration files are committed but have **not** been run against the hosted
-database:
+The migrations in `supabase/migrations/` are the **entire database**. The baseline
+was reconstructed from the live schema, and everything since (new columns, new
+functions, RLS fixes) is a migration file. There is no migration log in the repo,
+and the ones you applied by hand have already proven to be an unreliable record —
+`20260801120200` was skipped and the app broke with error `42703` on the OWNER
+pages, while `docs/verify-setup.sql` still printed all-PASS because it did not
+check that column. **Do not trust history. Apply the full chain in order, oldest
+first, then verify.** The files are all idempotent (`IF NOT EXISTS`,
+`DROP ... IF EXISTS`, `CREATE OR REPLACE`), so running one twice is harmless.
 
 | File | What it adds |
 |---|---|
-| `supabase/migrations/20260801120700_account_provisioning.sql` | `users.status`, `users.email`, the 2-assistant cap, tightened INSERT/UPDATE policies |
-| `supabase/migrations/20260801120800_shop_status_is_platform_only.sql` | Stops an owner deactivating their own shop |
+| `20260801120000_baseline_schema.sql` | All 8 tables, indexes, RLS helpers, baseline policies |
+| `20260801120100_pin_function_search_path.sql` | Pins `search_path` on the SECURITY DEFINER helpers |
+| `20260801120200_allow_discounts_and_partial_payments.sql` | `sales.amount_paid`; negative-profit sales; payment-status checks |
+| `20260801120300_integrity_constraints.sql` | Unique `users.auth_id`, FIFO indexes, quantity/tenant constraints |
+| `20260801120400_super_admin_metrics_only.sql` | Stops SUPER_ADMIN reading business data (SRS 5.1) |
+| `20260801120500_shop_default_interest.sql` | Per-shop markup default; interest NOT NULL |
+| `20260801120600_record_sale_fifo.sql` | `record_sale()` RPC — FIFO deduction, profit, partial payment |
+| `20260801120700_account_provisioning.sql` | `users.status`, `users.email`, the 2-assistant cap, tightened policies |
+| `20260801120800_shop_status_is_platform_only.sql` | Stops an owner deactivating their own shop |
 
-Until the first one runs, `users.status` does not exist — and `requireSession()`
-selects it on **every** request, so every dashboard page and every login will
-error. This is not limited to the account pages.
+`20260801120700` is the one that was previously blocking **every** dashboard page
+and every login: `requireSession()` selects `users.status`, so until that column
+exists nothing works at all.
 
 ### Steps
 
 1. Open **Supabase dashboard → SQL Editor → New query**.
-2. Open `supabase/migrations/20260801120700_account_provisioning.sql`, paste the
-   whole file, click **Run**.
-3. Repeat for `20260801120800_shop_status_is_platform_only.sql`. Order matters.
+2. Open the oldest file — `supabase/migrations/20260801120000_baseline_schema.sql`
+   — paste the whole file, click **Run**.
+3. Repeat for each of the remaining files, **in filename order** (120100 →
+   120200 → … → 120800). Each file is a separate query; the SQL editor does not
+   accept them pasted together.
 4. Paste and run `docs/verify-setup.sql`.
 
 Every row of the verification query should read `PASS`. Any `FAIL` row names the
-step that is missing and what breaks while it is.
+migration that is missing and what breaks while it is.
 
-Both files are written to be idempotent (`ADD COLUMN IF NOT EXISTS`,
-`DROP POLICY IF EXISTS`, `CREATE OR REPLACE`), so running one twice is harmless.
-If you are unsure whether a migration was applied, run it again.
+Note on `20260801120200`: if the shop has already recorded sales, the file
+backfills `amount_paid` from `payment_status` before adding its constraint, so
+settled sales stay settled. If you ran an **older version** of that file without
+the backfill and it errored mid-way, the column may exist but the constraint is
+missing — the verify query will flag it, and you can paste the file again to
+finish (the column add is `IF NOT EXISTS`, so re-running is safe).
 
 ### If you are not sure which earlier migrations were applied
 
