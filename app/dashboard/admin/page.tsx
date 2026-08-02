@@ -11,6 +11,8 @@ import { getAdminDashboardData } from "@/lib/admin/dashboard-data";
 import type { AdminShop, AdminUser } from "@/lib/admin/queries";
 import { formatDate } from "@/lib/utils/format";
 
+export const metadata = { title: "Admin dashboard" };
+
 const ROLE_LABELS: Record<AdminUser["role"], string> = {
   SUPER_ADMIN: "Platform admin",
   OWNER: "Owner",

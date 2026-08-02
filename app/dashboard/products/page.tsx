@@ -7,6 +7,8 @@ import { listCategories, listInventory, listProducts } from "@/lib/shop/queries"
 
 import { ProductManager } from "./product-manager";
 
+export const metadata = { title: "Products" };
+
 /**
  * Product catalogue (SRS 6.3).
  *

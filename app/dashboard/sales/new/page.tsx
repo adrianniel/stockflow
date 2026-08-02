@@ -7,6 +7,8 @@ import { listSellableProducts } from "@/lib/shop/queries";
 
 import { SaleComposer } from "./sale-composer";
 
+export const metadata = { title: "New sale" };
+
 /**
  * New sale (SRS 8-11).
  *

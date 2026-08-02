@@ -18,6 +18,8 @@ import {
   toNumber,
 } from "@/lib/utils/format";
 
+export const metadata = { title: "Shop dashboard" };
+
 /** Matches LOW_STOCK_THRESHOLD in lib/shop/reports.ts. */
 const LOW_STOCK_THRESHOLD = 5;
 

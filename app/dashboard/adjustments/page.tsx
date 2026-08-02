@@ -10,6 +10,8 @@ import { formatDateTime } from "@/lib/utils/format";
 
 import { AdjustStockDialog } from "./adjust-stock-dialog";
 
+export const metadata = { title: "Stock adjustments" };
+
 /**
  * Stock adjustments (SRS 13).
  *

@@ -7,6 +7,8 @@ import { listCategoriesWithCounts } from "@/lib/shop/queries";
 
 import { CategoryManager } from "./category-manager";
 
+export const metadata = { title: "Categories" };
+
 /**
  * Categories (SRS 6.3).
  *

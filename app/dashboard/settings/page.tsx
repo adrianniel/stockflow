@@ -9,6 +9,8 @@ import { toNumber } from "@/lib/utils/format";
 import { ChangePasswordForm } from "./change-password-form";
 import { ShopSettingsForm } from "./shop-settings-form";
 
+export const metadata = { title: "Settings" };
+
 /**
  * Settings (SRS 6.1).
  *

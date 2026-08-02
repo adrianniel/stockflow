@@ -12,9 +12,20 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+/**
+ * `%s | StockFlow` lets a page set just its own name via `title` and get the
+ * product name appended; the landing page overrides it with `absolute`.
+ *
+ * The icon is app/icon.png, which Next.js picks up by filename — no `icons`
+ * entry is needed here.
+ */
 export const metadata: Metadata = {
-  title: "StockFlow",
-  description: "Professional inventory management for modern businesses.",
+  title: {
+    default: "StockFlow",
+    template: "%s | StockFlow",
+  },
+  description:
+    "Inventory and sales management for small auto parts shops. Track stock batches, prices, and profit.",
 };
 
 export default function RootLayout({

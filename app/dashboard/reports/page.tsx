@@ -7,6 +7,8 @@ import { shopContextFor } from "@/lib/shop/context";
 import { getProfitReport, type SalesSummary } from "@/lib/shop/reports";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/utils/format";
 
+export const metadata = { title: "Reports" };
+
 /**
  * Sales and profit reports (SRS 12).
  *

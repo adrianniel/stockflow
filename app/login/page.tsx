@@ -1,4 +1,8 @@
+import { Logo } from "@/components/ui/logo";
+
 import { LoginForm } from "./login-form";
+
+export const metadata = { title: "Sign in" };
 
 /**
  * The `blocked` parameter is set by the route guards (lib/auth/guards.ts) when a
@@ -24,9 +28,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     <main className="flex min-h-screen items-center justify-center bg-slate-100 p-4 text-slate-950">
       <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white/90 p-8 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur">
         <div className="flex flex-col items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-sm font-semibold text-white">
-            SF
-          </div>
+          <Logo size="lg" priority />
 
           <div className="text-center">
             <h1 className="text-2xl font-semibold tracking-tight">StockFlow</h1>

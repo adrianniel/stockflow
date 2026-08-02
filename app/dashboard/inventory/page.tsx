@@ -14,6 +14,8 @@ import { formatCurrency, formatNumber } from "@/lib/utils/format";
 
 import { ReceiveStockDialog } from "./receive-stock-dialog";
 
+export const metadata = { title: "Inventory" };
+
 /**
  * Inventory overview (SRS 6.4).
  *

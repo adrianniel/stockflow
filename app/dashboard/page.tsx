@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth/guards";
 import { dashboardPathForRole } from "@/lib/auth/roles";
 
+export const metadata = { title: "Dashboard" };
+
 /**
  * /dashboard is a router, not a page. It resolves the signed-in user's role and
  * forwards to the matching dashboard.

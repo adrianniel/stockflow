@@ -6,6 +6,8 @@ import { getDashboardIdentity } from "@/lib/dashboard/identity";
 
 import { ShopManager } from "./shop-manager";
 
+export const metadata = { title: "Shops" };
+
 /**
  * Shop registry (SRS 5.1, 6.2). SUPER_ADMIN only.
  *

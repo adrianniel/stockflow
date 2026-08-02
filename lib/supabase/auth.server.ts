@@ -1,7 +1,22 @@
+import { isAuthSessionMissingError } from "@supabase/supabase-js";
+
 import type { SessionProfile } from "@/lib/auth/roles";
 
 import { createSupabaseServerClient } from "./server";
 
+/**
+ * The signed-in auth user, or null when nobody is signed in.
+ *
+ * "No session" arrives from supabase-js as an AuthSessionMissingError rather
+ * than as a null user, and it is not a failure — it is the ordinary state of an
+ * anonymous visitor. Rethrowing it would send every signed-out request to
+ * /dashboard into the error boundary with a 500 instead of letting
+ * requireSession() redirect to /login.
+ *
+ * Anything else is still thrown: an unreachable Supabase or a malformed token
+ * is a real fault, and silently reporting it as "signed out" would turn an
+ * outage into a confusing redirect loop through the login page.
+ */
 export async function getCurrentUser() {
   const supabase = await createSupabaseServerClient();
 
@@ -11,6 +26,10 @@ export async function getCurrentUser() {
   } = await supabase.auth.getUser();
 
   if (error) {
+    if (isAuthSessionMissingError(error)) {
+      return null;
+    }
+
     throw error;
   }
 

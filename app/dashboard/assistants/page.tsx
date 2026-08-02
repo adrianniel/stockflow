@@ -7,6 +7,8 @@ import { listShopMembers } from "@/lib/shop/queries";
 
 import { AssistantManager } from "./assistant-manager";
 
+export const metadata = { title: "Assistants" };
+
 /**
  * Assistant accounts (SRS 5.2, 6.2).
  *

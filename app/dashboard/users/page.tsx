@@ -6,6 +6,8 @@ import { getDashboardIdentity } from "@/lib/dashboard/identity";
 
 import { UserManager } from "./user-manager";
 
+export const metadata = { title: "Users" };
+
 /**
  * Account registry (SRS 5.1, 6.2). SUPER_ADMIN only.
  */

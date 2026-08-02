@@ -14,6 +14,8 @@ import { getDashboardSummary } from "@/lib/shop/reports";
 import type { SaleWithSeller } from "@/lib/shop/types";
 import { formatCurrency, formatDateTime, toNumber } from "@/lib/utils/format";
 
+export const metadata = { title: "Sales" };
+
 /**
  * Sales history (SRS 12).
  *
