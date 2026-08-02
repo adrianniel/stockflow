@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar";
+import { Credit } from "@/components/ui/credit";
 import { requireSession } from "@/lib/auth/guards";
 import { navigationForRole } from "@/lib/auth/roles";
 import { getCurrentUser, getUserProfile } from "@/lib/supabase/auth.server";
@@ -65,7 +66,16 @@ export default async function DashboardLayout({
           profile={profile}
         />
 
-        <main className="flex min-w-0 flex-1 flex-col gap-6">{children}</main>
+        <main className="flex min-w-0 flex-1 flex-col gap-6">
+          {children}
+
+          {/*
+            Sits at the end of the content column rather than in the sidebar so
+            it appears once per page, below the work, on both phone and desktop.
+            mt-auto keeps it at the bottom on pages too short to fill the screen.
+          */}
+          <Credit className="mt-auto pt-2" />
+        </main>
       </div>
     </div>
   );

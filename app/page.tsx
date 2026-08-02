@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { Credit } from "@/components/ui/credit";
 import { Logo } from "@/components/ui/logo";
 import { getCurrentUser } from "@/lib/supabase/auth.server";
 
@@ -86,6 +87,10 @@ export default async function Home() {
           </div>
         </dl>
       </div>
+
+      {/* mt-auto pins the credit to the bottom on a tall screen, since the
+          content column above it is not full height. */}
+      <Credit className="mt-auto px-6 pb-8" />
     </main>
   );
 }

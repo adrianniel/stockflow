@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { Credit } from "@/components/ui/credit";
 import { Logo } from "@/components/ui/logo";
 
 /**
@@ -14,7 +15,7 @@ import { Logo } from "@/components/ui/logo";
  */
 export default function NotFound() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-100 p-4 text-slate-950">
+    <main className="flex min-h-screen flex-col items-center justify-center gap-6 bg-slate-100 p-4 text-slate-950">
       <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white/90 p-8 text-center shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur">
         <div className="flex justify-center">
           <Logo size="lg" />
@@ -45,6 +46,8 @@ export default function NotFound() {
           </Link>
         </div>
       </div>
+
+      <Credit />
     </main>
   );
 }
