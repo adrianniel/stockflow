@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
+import { PasswordInput } from "@/components/ui/password-input";
 import { signIn, signOut } from "@/lib/supabase/auth";
 import { errorMessage } from "@/lib/utils/errors";
 
@@ -81,9 +82,8 @@ export function LoginForm({ blocked }: LoginFormProps) {
         htmlFor="password"
         error={errors.password?.message}
       >
-        <Input
+        <PasswordInput
           id="password"
-          type="password"
           autoComplete="current-password"
           aria-invalid={errors.password ? true : undefined}
           {...register("password", { required: "Password is required" })}

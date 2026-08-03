@@ -101,6 +101,7 @@ export function navigationForRole(role: UserRole): NavItem[] {
         { label: "Categories", href: "/dashboard/categories" },
         { label: "Inventory", href: "/dashboard/inventory" },
         { label: "Sales", href: "/dashboard/sales" },
+        { label: "Credit", href: "/dashboard/credit" },
         { label: "Adjustments", href: "/dashboard/adjustments" },
         { label: "Reports", href: "/dashboard/reports" },
         { label: "Assistants", href: "/dashboard/assistants" },
@@ -109,12 +110,18 @@ export function navigationForRole(role: UserRole): NavItem[] {
 
     // SRS 5.3: stock arrivals, sales, view inventory, view reports. No
     // ownership management, so no Categories, Assistants or Adjustments.
+    //
+    // Credit is included: the assistant at the counter is usually the person a
+    // customer hands a payment to, so they can record collections. Editing and
+    // deleting payments, and managing the customer list, stay owner-only and are
+    // enforced by RLS rather than by this list.
     case "ASSISTANT":
       return [
         { label: "Dashboard", href: "/dashboard/assistant" },
         { label: "Products", href: "/dashboard/products" },
         { label: "Inventory", href: "/dashboard/inventory" },
         { label: "Sales", href: "/dashboard/sales" },
+        { label: "Credit", href: "/dashboard/credit" },
         { label: "Reports", href: "/dashboard/reports" },
         { label: "Settings", href: "/dashboard/settings" },
       ];

@@ -73,10 +73,12 @@ export type Sale = {
   payment_status: PaymentStatus;
   sale_date: string | null;
   sold_by: string | null;
+  customer_id: string | null;
 };
 
 export type SaleWithSeller = Sale & {
   seller_name: string | null;
+  customer_name: string | null;
   item_count: number;
 };
 
@@ -100,6 +102,44 @@ export type StockAdjustment = {
   batch_number: string | null;
   product_name: string | null;
   adjusted_by_name: string | null;
+};
+
+/**
+ * A named credit customer.
+ *
+ * Text only, by design — a customer is a name, optionally a phone number, and
+ * optionally a short note. Nothing here is large enough to matter against the
+ * database size limit even for a shop with thousands of regulars.
+ */
+export type Customer = {
+  id: string;
+  name: string;
+  phone: string | null;
+  notes: string | null;
+  created_at: string | null;
+};
+
+/**
+ * A customer with their debt position, as the credit page lists them.
+ *
+ * `outstanding` is the sum of (total_amount - amount_paid) over their unsettled
+ * sales, so it is what they owe right now rather than what they have ever been
+ * lent.
+ */
+export type CustomerWithBalance = Customer & {
+  outstanding: number;
+  unpaidSaleCount: number;
+  /** Oldest sale_date among their unsettled sales, for "owing since". */
+  oldestUnpaidDate: string | null;
+};
+
+/** One instalment received against a sale. */
+export type SalePayment = {
+  id: string;
+  amount: string;
+  collected_at: string;
+  note: string | null;
+  collected_by_name: string | null;
 };
 
 /**

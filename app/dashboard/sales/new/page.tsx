@@ -3,7 +3,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { requireRole } from "@/lib/auth/guards";
 import { getDashboardIdentity } from "@/lib/dashboard/identity";
 import { shopContextFor } from "@/lib/shop/context";
-import { listSellableProducts } from "@/lib/shop/queries";
+import { listCustomers, listSellableProducts } from "@/lib/shop/queries";
 
 import { SaleComposer } from "./sale-composer";
 
@@ -24,7 +24,10 @@ export default async function NewSalePage() {
     shopContextFor(profile),
   ]);
 
-  const products = await listSellableProducts(context);
+  const [products, customers] = await Promise.all([
+    listSellableProducts(context),
+    listCustomers(context),
+  ]);
 
   return (
     <>
@@ -43,7 +46,7 @@ export default async function NewSalePage() {
         </ButtonLink>
       </div>
 
-      <SaleComposer products={products} />
+      <SaleComposer products={products} customers={customers} />
     </>
   );
 }

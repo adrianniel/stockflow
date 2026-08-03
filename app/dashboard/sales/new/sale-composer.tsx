@@ -10,7 +10,12 @@ import { FormAlert, SubmitButton, fieldError } from "@/components/ui/form-status
 import { Panel, PanelHeader } from "@/components/ui/panel";
 import { IDLE } from "@/lib/shop/action-result";
 import { recordSale } from "@/lib/shop/actions";
-import type { CartLine, InventoryLine, PaymentStatus } from "@/lib/shop/types";
+import type {
+  CartLine,
+  Customer,
+  InventoryLine,
+  PaymentStatus,
+} from "@/lib/shop/types";
 import { formatCurrency } from "@/lib/utils/format";
 
 /**
@@ -26,11 +31,18 @@ import { formatCurrency } from "@/lib/utils/format";
  * What is submitted is the cart: product ids, quantities, and any price
  * override. The server derives everything else.
  */
-export function SaleComposer({ products }: { products: InventoryLine[] }) {
+export function SaleComposer({
+  products,
+  customers,
+}: {
+  products: InventoryLine[];
+  customers: Customer[];
+}) {
   const router = useRouter();
   const [lines, setLines] = useState<CartLine[]>([]);
   const [search, setSearch] = useState("");
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("PAID");
+  const [customerId, setCustomerId] = useState("");
   const [state, formAction] = useActionState(recordSale, IDLE);
 
   // Cleared after a successful sale so the next customer starts fresh.
@@ -49,6 +61,7 @@ export function SaleComposer({ products }: { products: InventoryLine[] }) {
       setLines([]);
       setSearch("");
       setPaymentStatus("PAID");
+      setCustomerId("");
     }
   }
 
@@ -135,6 +148,12 @@ export function SaleComposer({ products }: { products: InventoryLine[] }) {
           parses and re-validates every entry regardless of what arrives. */}
       <input type="hidden" name="items" value={JSON.stringify(lines)} />
       <input type="hidden" name="payment_status" value={paymentStatus} />
+      {/* Only sent for credit and partial: a cash walk-in has no customer, and
+          sending a stale id after switching back to Paid would attach a debtor
+          to a settled sale. */}
+      {paymentStatus !== "PAID" ? (
+        <input type="hidden" name="customer_id" value={customerId} />
+      ) : null}
 
       <Panel>
         <PanelHeader
@@ -236,6 +255,34 @@ export function SaleComposer({ products }: { products: InventoryLine[] }) {
                 />
               </Field>
             ) : null}
+
+            {paymentStatus !== "PAID" ? (
+              <Field
+                label="Customer"
+                htmlFor="sale-customer"
+                error={fieldError(state, "customer_id")}
+                hint={
+                  customers.length > 0
+                    ? "Who owes for this sale."
+                    : "Add a customer on the Credit page first."
+                }
+              >
+                <Select
+                  id="sale-customer"
+                  value={customerId}
+                  onChange={(event) => setCustomerId(event.target.value)}
+                  disabled={customers.length === 0}
+                  required
+                >
+                  <option value="">Select a customer</option>
+                  {customers.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            ) : null}
           </div>
 
           <FormAlert state={state} />
@@ -249,7 +296,9 @@ export function SaleComposer({ products }: { products: InventoryLine[] }) {
               Clear sale
             </Button>
 
-            <SaleSubmit disabled={!hasLines} />
+            <SaleSubmit
+              disabled={!hasLines || (paymentStatus !== "PAID" && customerId === "")}
+            />
           </div>
         </div>
       </Panel>

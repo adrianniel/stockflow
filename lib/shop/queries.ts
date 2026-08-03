@@ -3,10 +3,13 @@ import { toNumber } from "@/lib/utils/format";
 import type { ShopContext } from "./context";
 import type {
   Category,
+  Customer,
+  CustomerWithBalance,
   InventoryLine,
   PaymentStatus,
   ProductWithCategory,
   SaleItem,
+  SalePayment,
   SaleWithSeller,
   ShopMember,
   StockAdjustment,
@@ -332,7 +335,9 @@ type SaleRow = {
   payment_status: PaymentStatus;
   sale_date: string | null;
   sold_by: string | null;
+  customer_id: string | null;
   users: Embedded<{ name: string | null }>;
+  customers: Embedded<{ name: string }>;
   sale_items: Array<{ id: string }> | null;
 };
 
@@ -344,7 +349,9 @@ const SALE_SELECT = `
   payment_status,
   sale_date,
   sold_by,
+  customer_id,
   users ( name ),
+  customers ( name ),
   sale_items ( id )
 `;
 
@@ -357,7 +364,9 @@ function toSaleWithSeller(row: SaleRow): SaleWithSeller {
     payment_status: row.payment_status,
     sale_date: row.sale_date,
     sold_by: row.sold_by,
+    customer_id: row.customer_id,
     seller_name: one(row.users)?.name ?? null,
+    customer_name: one(row.customers)?.name ?? null,
     item_count: row.sale_items?.length ?? 0,
   };
 }
@@ -462,6 +471,185 @@ export async function listSaleItems(
       product_name: one(batch?.products ?? null)?.product_name ?? null,
     };
   });
+}
+
+// ---------------------------------------------------------------------------
+// Customers and credit
+// ---------------------------------------------------------------------------
+
+const CUSTOMER_SELECT = "id, name, phone, notes, created_at";
+
+export async function listCustomers({
+  supabase,
+  shopId,
+}: ShopContext): Promise<Customer[]> {
+  const { data, error } = await supabase
+    .from("customers")
+    .select(CUSTOMER_SELECT)
+    .eq("shop_id", shopId)
+    .order("name");
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as Customer[];
+}
+
+export async function getCustomer(
+  { supabase, shopId }: ShopContext,
+  customerId: string,
+): Promise<Customer | null> {
+  const { data, error } = await supabase
+    .from("customers")
+    .select(CUSTOMER_SELECT)
+    .eq("shop_id", shopId)
+    .eq("id", customerId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return (data as Customer | null) ?? null;
+}
+
+type UnpaidSaleRow = {
+  id: string;
+  customer_id: string | null;
+  total_amount: string;
+  amount_paid: string;
+  sale_date: string | null;
+};
+
+/**
+ * Every customer with what they currently owe.
+ *
+ * The balance is aggregated in Node rather than in SQL because doing it in
+ * Postgres needs either a view or an RPC, and the row count here is naturally
+ * small: only unsettled sales are fetched, and a shop with more than a few
+ * hundred open debts has a collections problem rather than a reporting one.
+ * If that assumption ever breaks, this becomes a SQL aggregate — the shape of
+ * the return value is chosen so that swap needs no caller changes.
+ *
+ * Customers with nothing outstanding are included, with a zero balance, so the
+ * page can serve as the shop's customer list as well as its debt list.
+ */
+export async function listCustomersWithBalances(
+  context: ShopContext,
+): Promise<CustomerWithBalance[]> {
+  const { supabase, shopId } = context;
+
+  const [customers, unpaid] = await Promise.all([
+    listCustomers(context),
+    supabase
+      .from("sales")
+      .select("id, customer_id, total_amount, amount_paid, sale_date")
+      .eq("shop_id", shopId)
+      .not("customer_id", "is", null)
+      .neq("payment_status", "PAID")
+      .order("sale_date"),
+  ]);
+
+  if (unpaid.error) {
+    throw unpaid.error;
+  }
+
+  const balances = new Map<
+    string,
+    { outstanding: number; count: number; oldest: string | null }
+  >();
+
+  for (const row of (unpaid.data ?? []) as UnpaidSaleRow[]) {
+    if (!row.customer_id) {
+      continue;
+    }
+
+    const entry = balances.get(row.customer_id) ?? {
+      outstanding: 0,
+      count: 0,
+      oldest: null,
+    };
+
+    entry.outstanding += toNumber(row.total_amount) - toNumber(row.amount_paid);
+    entry.count += 1;
+
+    // Rows arrive oldest-first, so the first one seen for a customer is the
+    // one they have owed the longest.
+    entry.oldest ??= row.sale_date;
+
+    balances.set(row.customer_id, entry);
+  }
+
+  return customers.map((customer) => {
+    const entry = balances.get(customer.id);
+
+    return {
+      ...customer,
+      outstanding: entry?.outstanding ?? 0,
+      unpaidSaleCount: entry?.count ?? 0,
+      oldestUnpaidDate: entry?.oldest ?? null,
+    };
+  });
+}
+
+/** One customer's unsettled sales, oldest first — the order to collect in. */
+export async function listCustomerUnpaidSales(
+  { supabase, shopId }: ShopContext,
+  customerId: string,
+): Promise<SaleWithSeller[]> {
+  const { data, error } = await supabase
+    .from("sales")
+    .select(SALE_SELECT)
+    .eq("shop_id", shopId)
+    .eq("customer_id", customerId)
+    .neq("payment_status", "PAID")
+    .order("sale_date");
+
+  if (error) {
+    throw error;
+  }
+
+  return ((data ?? []) as SaleRow[]).map(toSaleWithSeller);
+}
+
+type SalePaymentRow = {
+  id: string;
+  amount: string;
+  collected_at: string;
+  note: string | null;
+  users: Embedded<{ name: string | null }>;
+};
+
+/**
+ * The instalments recorded against one sale.
+ *
+ * Ordered by collected_at, which is when the money arrived — not created_at,
+ * which is when the row was typed in. A payment entered the next morning
+ * belongs in the sequence where it was collected.
+ */
+export async function listSalePayments(
+  { supabase, shopId }: ShopContext,
+  saleId: string,
+): Promise<SalePayment[]> {
+  const { data, error } = await supabase
+    .from("sale_payments")
+    .select("id, amount, collected_at, note, users ( name )")
+    .eq("shop_id", shopId)
+    .eq("sale_id", saleId)
+    .order("collected_at");
+
+  if (error) {
+    throw error;
+  }
+
+  return ((data ?? []) as SalePaymentRow[]).map((row) => ({
+    id: row.id,
+    amount: row.amount,
+    collected_at: row.collected_at,
+    note: row.note,
+    collected_by_name: one(row.users)?.name ?? null,
+  }));
 }
 
 // ---------------------------------------------------------------------------

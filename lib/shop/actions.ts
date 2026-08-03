@@ -519,10 +519,22 @@ export async function recordSale(
       amountPaid = money(value);
     }
 
+    // A debt needs someone attached to it, or the shop has no way to collect it
+    // later. record_sale() enforces this too — this check exists to name the
+    // field rather than surface a database exception.
+    const customerId = readOptionalUuid(form, "customer_id");
+
+    if (paymentStatus !== "PAID" && customerId === null) {
+      return failure("Choose a customer for a credit or partial sale.", {
+        customer_id: "Select who owes for this sale.",
+      });
+    }
+
     const { data, error } = await supabase.rpc("record_sale", {
       p_items: items,
       p_payment_status: paymentStatus,
       p_amount_paid: amountPaid,
+      p_customer_id: customerId,
     });
 
     if (error) {
@@ -540,6 +552,251 @@ export async function recordSale(
     return success(
       typeof data === "string" ? `Sale recorded (${data.slice(0, 8)}).` : "Sale recorded.",
     );
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Customers and credit collection
+// ---------------------------------------------------------------------------
+
+/**
+ * Adds a credit customer.
+ *
+ * Open to assistants, matching the RLS policy. The reasoning is in
+ * 20260801120900: an assistant who cannot add a customer mid-sale will record
+ * the utang as a cash sale instead, and the debt disappears from the books.
+ * Renaming and deleting stay owner-only.
+ */
+export async function createCustomer(
+  _previous: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  return withShop(async () => {
+    const { supabase, shopId, userId } = await getShopContext(
+      "OWNER",
+      "ASSISTANT",
+    );
+    const errors = new FormErrors();
+
+    const name = requiredText(form, "name", errors, {
+      label: "Customer name",
+      max: 120,
+    });
+    const phone = readOptionalString(form, "phone");
+    const notes = readOptionalString(form, "notes");
+
+    if (phone !== null && phone.length > 40) {
+      errors.add("phone", "Phone number must be 40 characters or fewer.");
+    }
+
+    if (notes !== null && notes.length > 500) {
+      errors.add("notes", "Notes must be 500 characters or fewer.");
+    }
+
+    if (errors.hasErrors) {
+      return failure("Check the highlighted fields.", errors.all);
+    }
+
+    const { error } = await supabase.from("customers").insert({
+      shop_id: shopId,
+      name,
+      phone,
+      notes,
+      created_by: userId,
+    });
+
+    if (error) {
+      // customers_shop_name_key. Reported against the field so the form can
+      // point at it, rather than as a bare "duplicate key" from Postgres.
+      if (error.code === "23505") {
+        return failure(`"${name}" is already in your customer list.`, {
+          name: "This name is already taken.",
+        });
+      }
+
+      return databaseFailure(error, "Could not add the customer.");
+    }
+
+    revalidatePath("/dashboard/credit");
+    revalidatePath("/dashboard/sales/new");
+
+    return success(`${name} added.`);
+  });
+}
+
+export async function updateCustomer(
+  _previous: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  return withShop(async () => {
+    const { supabase, shopId } = await getShopContext("OWNER");
+    const errors = new FormErrors();
+
+    const id = readString(form, "id");
+    const name = requiredText(form, "name", errors, {
+      label: "Customer name",
+      max: 120,
+    });
+    const phone = readOptionalString(form, "phone");
+    const notes = readOptionalString(form, "notes");
+
+    if (!isUuid(id)) {
+      return failure("That customer could not be found.");
+    }
+
+    if (errors.hasErrors) {
+      return failure("Check the highlighted fields.", errors.all);
+    }
+
+    const { error } = await supabase
+      .from("customers")
+      .update({ name, phone, notes })
+      .eq("id", id)
+      .eq("shop_id", shopId);
+
+    if (error) {
+      if (error.code === "23505") {
+        return failure(`"${name}" is already in your customer list.`, {
+          name: "This name is already taken.",
+        });
+      }
+
+      return databaseFailure(error, "Could not update the customer.");
+    }
+
+    revalidatePath("/dashboard/credit");
+    revalidatePath(`/dashboard/credit/${id}`);
+
+    return success("Customer updated.");
+  });
+}
+
+/**
+ * Deletes a customer.
+ *
+ * Refused while they still owe money — `sales.customer_id` is ON DELETE SET
+ * NULL, so deleting a debtor would leave their unpaid sales in the books with
+ * nobody attached, and the shop would lose track of the debt rather than
+ * cancelling it. Settle or write off the balance first.
+ */
+export async function deleteCustomer(
+  _previous: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  return withShop(async () => {
+    const { supabase, shopId } = await getShopContext("OWNER");
+
+    const id = readString(form, "id");
+
+    if (!isUuid(id)) {
+      return failure("That customer could not be found.");
+    }
+
+    const { data: unpaid, error: unpaidError } = await supabase
+      .from("sales")
+      .select("id")
+      .eq("shop_id", shopId)
+      .eq("customer_id", id)
+      .neq("payment_status", "PAID")
+      .limit(1);
+
+    if (unpaidError) {
+      return databaseFailure(unpaidError, "Could not check the balance.");
+    }
+
+    if ((unpaid ?? []).length > 0) {
+      return failure(
+        "This customer still has unpaid sales. Collect or settle them before removing the customer.",
+      );
+    }
+
+    const { error } = await supabase
+      .from("customers")
+      .delete()
+      .eq("id", id)
+      .eq("shop_id", shopId);
+
+    if (error) {
+      return databaseFailure(error, "Could not remove the customer.");
+    }
+
+    revalidatePath("/dashboard/credit");
+
+    return success("Customer removed.");
+  });
+}
+
+/**
+ * Records an instalment against a sale.
+ *
+ * All of the work is in `record_payment()`: it locks the sale row, checks the
+ * amount against the outstanding balance, and lets a trigger recompute
+ * `amount_paid` and `payment_status` from the ledger. Doing it here instead
+ * would mean reading the balance and then writing it back, and two clerks
+ * accepting the last of a debt at once would both pass that check.
+ *
+ * Open to assistants: they are usually the person the cash is handed to.
+ */
+export async function recordPayment(
+  _previous: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  return withShop(async () => {
+    const { supabase } = await getShopContext("OWNER", "ASSISTANT");
+    const errors = new FormErrors();
+
+    const saleId = readString(form, "sale_id");
+    const amount = requiredNumber(form, "amount", errors, {
+      label: "Amount",
+      min: 0.01,
+    });
+    const note = readOptionalString(form, "note");
+
+    // Only used to revalidate the page the payment was taken on. Not trusted
+    // for anything else: `record_payment()` derives the shop and the customer
+    // from the sale itself, so a forged id here changes nothing but which
+    // cache entry is dropped.
+    const customerId = readOptionalUuid(form, "customer_id");
+
+    if (!isUuid(saleId)) {
+      return failure("That sale could not be found.");
+    }
+
+    if (note !== null && note.length > 200) {
+      errors.add("note", "Note must be 200 characters or fewer.");
+    }
+
+    if (errors.hasErrors) {
+      return failure("Check the highlighted fields.", errors.all);
+    }
+
+    const { error } = await supabase.rpc("record_payment", {
+      p_sale_id: saleId,
+      p_amount: money(amount),
+      p_collected_at: null,
+      p_note: note,
+    });
+
+    if (error) {
+      // "Payment of X exceeds the outstanding balance of Y" and friends are
+      // RAISE EXCEPTION text written for the user, so it passes through.
+      return databaseFailure(error, "Could not record the payment.");
+    }
+
+    revalidatePath("/dashboard/credit");
+    revalidatePath("/dashboard/sales");
+    revalidatePath(`/dashboard/sales/${saleId}`);
+
+    // The customer page the collection was taken on, when the form sent one.
+    if (customerId !== null) {
+      revalidatePath(`/dashboard/credit/${customerId}`);
+    }
+
+    revalidatePath("/dashboard/reports");
+    revalidatePath("/dashboard/owner");
+    revalidatePath("/dashboard/assistant");
+
+    return success("Payment recorded.");
   });
 }
 

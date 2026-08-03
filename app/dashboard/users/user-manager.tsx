@@ -9,6 +9,7 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { Field, Input, Select } from "@/components/ui/field";
 import { FormAlert, SubmitButton, fieldError } from "@/components/ui/form-status";
 import { Modal } from "@/components/ui/modal";
+import { PasswordInput } from "@/components/ui/password-input";
 import { PanelHeader } from "@/components/ui/panel";
 import { createOwner, setUserStatus } from "@/lib/admin/actions";
 import type { AdminUser } from "@/lib/admin/queries";
@@ -252,10 +253,9 @@ function CreateOwnerDialog({
           error={fieldError(state, "password")}
           hint="At least 8 characters."
         >
-          <Input
+          <PasswordInput
             id="owner-password"
             name="password"
-            type="password"
             minLength={8}
             autoComplete="new-password"
             required

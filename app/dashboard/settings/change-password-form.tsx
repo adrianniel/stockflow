@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
-import { Field, Input } from "@/components/ui/field";
+import { Field } from "@/components/ui/field";
+import { PasswordInput } from "@/components/ui/password-input";
 import { changePassword } from "@/lib/supabase/auth";
 import { errorMessage } from "@/lib/utils/errors";
 
@@ -66,9 +67,8 @@ export function ChangePasswordForm() {
         error={errors.password?.message}
         hint="At least 8 characters."
       >
-        <Input
+        <PasswordInput
           id="new-password"
-          type="password"
           autoComplete="new-password"
           {...register("password", {
             required: "Enter a new password",
@@ -85,9 +85,8 @@ export function ChangePasswordForm() {
         htmlFor="confirm-password"
         error={errors.confirmPassword?.message}
       >
-        <Input
+        <PasswordInput
           id="confirm-password"
-          type="password"
           autoComplete="new-password"
           {...register("confirmPassword", {
             required: "Repeat the new password",

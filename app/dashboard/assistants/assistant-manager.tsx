@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmForm } from "@/components/ui/confirm-form";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Field, Input } from "@/components/ui/field";
+import { PasswordInput } from "@/components/ui/password-input";
 import { FormAlert, SubmitButton, fieldError } from "@/components/ui/form-status";
 import { Modal } from "@/components/ui/modal";
 import { PanelHeader } from "@/components/ui/panel";
@@ -222,10 +223,9 @@ function CreateAssistantDialog({
           error={fieldError(state, "password")}
           hint="At least 8 characters."
         >
-          <Input
+          <PasswordInput
             id="assistant-password"
             name="password"
-            type="password"
             minLength={8}
             autoComplete="new-password"
             required

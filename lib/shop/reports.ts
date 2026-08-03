@@ -22,8 +22,24 @@ export type SalesSummary = {
   itemCount: number;
   totalSales: number;
   totalProfit: number;
+  /**
+   * Cash actually received in this range, from `sale_payments.collected_at`.
+   *
+   * Deliberately not derived from the sales in the range. A 500 utang sold on
+   * Monday and paid on Friday is 500 of Monday's *sales* and 500 of Friday's
+   * *collections*, and an owner reconciling the drawer on Friday needs the
+   * second number. Summing `sales.amount_paid` over Monday's sales answers
+   * neither question: it credits Friday's cash to Monday, and it moves
+   * retroactively as instalments arrive, so last week's report changes.
+   */
   totalCollected: number;
-  /** Unpaid balance across CREDIT and PARTIAL sales in the range. */
+  /**
+   * Unpaid balance across CREDIT and PARTIAL sales in the range.
+   *
+   * A present-tense figure: what is still owed on those sales as of now, not
+   * what was owed at the end of the range. It therefore falls as debts are
+   * collected, which is what makes it useful for chasing them.
+   */
   outstanding: number;
 };
 
@@ -133,8 +149,51 @@ async function loadSales(
   return (data ?? []) as SaleAggregateRow[];
 }
 
-function summarize(rows: SaleAggregateRow[]): SalesSummary {
-  return rows.reduce<SalesSummary>((summary, row) => {
+type PaymentAggregateRow = {
+  amount: string;
+  collected_at: string;
+};
+
+/**
+ * Loads payments collected in a half-open range [from, to).
+ *
+ * Filtered on `collected_at` — when the money arrived — rather than on the
+ * parent sale's date, which is the whole point of the separate ledger.
+ */
+async function loadPayments(
+  { supabase, shopId }: ShopContext,
+  from: Date,
+  to: Date,
+): Promise<PaymentAggregateRow[]> {
+  const { data, error } = await supabase
+    .from("sale_payments")
+    .select("amount, collected_at")
+    .eq("shop_id", shopId)
+    .gte("collected_at", from.toISOString())
+    .lt("collected_at", to.toISOString());
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as PaymentAggregateRow[];
+}
+
+function sumPayments(rows: PaymentAggregateRow[]): number {
+  return rows.reduce((total, row) => total + toNumber(row.amount), 0);
+}
+
+/**
+ * Rolls up sales, plus the cash collected over the same range.
+ *
+ * The two arrive separately because they are filtered on different columns and
+ * cannot come from one query — see SalesSummary.totalCollected.
+ */
+function summarize(
+  rows: SaleAggregateRow[],
+  collected: number,
+): SalesSummary {
+  const summary = rows.reduce<SalesSummary>((summary, row) => {
     const total = toNumber(row.total_amount);
     const paid = toNumber(row.amount_paid);
 
@@ -145,10 +204,12 @@ function summarize(rows: SaleAggregateRow[]): SalesSummary {
         (row.sale_items ?? []).reduce((sum, item) => sum + item.quantity, 0),
       totalSales: summary.totalSales + total,
       totalProfit: summary.totalProfit + toNumber(row.total_profit),
-      totalCollected: summary.totalCollected + paid,
+      totalCollected: 0,
       outstanding: summary.outstanding + (total - paid),
     };
   }, { ...EMPTY_SUMMARY });
+
+  return { ...summary, totalCollected: collected };
 }
 
 /**
@@ -163,17 +224,19 @@ export async function getDashboardSummary(
   const { supabase, shopId } = context;
   const todayStart = startOfDay(new Date());
 
-  const [todaySales, productsResult, batchesResult] = await Promise.all([
-    loadSales(context, todayStart, addDays(todayStart, 1)),
-    supabase
-      .from("products")
-      .select("id", { count: "exact", head: true })
-      .eq("shop_id", shopId),
-    supabase
-      .from("stock_batches")
-      .select("product_id, quantity_remaining, capital_price")
-      .eq("shop_id", shopId),
-  ]);
+  const [todaySales, todayPayments, productsResult, batchesResult] =
+    await Promise.all([
+      loadSales(context, todayStart, addDays(todayStart, 1)),
+      loadPayments(context, todayStart, addDays(todayStart, 1)),
+      supabase
+        .from("products")
+        .select("id", { count: "exact", head: true })
+        .eq("shop_id", shopId),
+      supabase
+        .from("stock_batches")
+        .select("product_id, quantity_remaining, capital_price")
+        .eq("shop_id", shopId),
+    ]);
 
   if (productsResult.error) {
     throw productsResult.error;
@@ -216,7 +279,7 @@ export async function getDashboardSummary(
   ).length;
 
   return {
-    today: summarize(todaySales),
+    today: summarize(todaySales, sumPayments(todayPayments)),
     productCount,
     inventory: {
       quantityOnHand,
@@ -247,10 +310,18 @@ export async function getProfitReport(
   // Whichever boundary reaches furthest back covers all three ranges.
   const rangeStart = weekStart < monthStart ? weekStart : monthStart;
 
-  const rows = await loadSales(context, rangeStart, tomorrowStart);
+  const [rows, payments] = await Promise.all([
+    loadSales(context, rangeStart, tomorrowStart),
+    loadPayments(context, rangeStart, tomorrowStart),
+  ]);
 
   const inRange = (row: SaleAggregateRow, from: Date) =>
     row.sale_date !== null && new Date(row.sale_date) >= from;
+
+  const collectedSince = (from: Date) =>
+    sumPayments(
+      payments.filter((payment) => new Date(payment.collected_at) >= from),
+    );
 
   const byDay = new Map<string, SaleAggregateRow[]>();
 
@@ -269,19 +340,45 @@ export async function getProfitReport(
     }
   }
 
+  // Bucketed on collected_at, so a day's row shows the cash that came in that
+  // day — including instalments against sales made weeks earlier, which is why
+  // a day can show collections larger than its own sales.
+  const collectedByDay = new Map<string, number>();
+
+  for (const payment of payments) {
+    const key = localDateKey(new Date(payment.collected_at));
+
+    collectedByDay.set(
+      key,
+      (collectedByDay.get(key) ?? 0) + toNumber(payment.amount),
+    );
+  }
+
   // Every day in the last 7 gets a row, including days with no sales — a gap in
   // the table reads as missing data rather than as a quiet day.
   const dailyBreakdown = Array.from({ length: 7 }, (_, index) => {
     const date = addDays(todayStart, -index);
     const key = localDateKey(date);
 
-    return { date: key, summary: summarize(byDay.get(key) ?? []) };
+    return {
+      date: key,
+      summary: summarize(byDay.get(key) ?? [], collectedByDay.get(key) ?? 0),
+    };
   });
 
   return {
-    today: summarize(rows.filter((row) => inRange(row, todayStart))),
-    last7Days: summarize(rows.filter((row) => inRange(row, weekStart))),
-    thisMonth: summarize(rows.filter((row) => inRange(row, monthStart))),
+    today: summarize(
+      rows.filter((row) => inRange(row, todayStart)),
+      collectedSince(todayStart),
+    ),
+    last7Days: summarize(
+      rows.filter((row) => inRange(row, weekStart)),
+      collectedSince(weekStart),
+    ),
+    thisMonth: summarize(
+      rows.filter((row) => inRange(row, monthStart)),
+      collectedSince(monthStart),
+    ),
     dailyBreakdown,
     topProducts: await getTopProducts(context, monthStart, tomorrowStart),
   };
