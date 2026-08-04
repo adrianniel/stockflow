@@ -419,6 +419,18 @@ function CartRow({
   onChange: (changes: Partial<CartLine>) => void;
   onRemove: () => void;
 }) {
+  /**
+   * What the quantity box is showing mid-edit, or null when it is not being
+   * edited and should mirror the committed quantity.
+   *
+   * It lives here rather than on CartLine because the cart is what gets
+   * serialised and posted, and a half-typed value is not a quantity. Nothing
+   * has to clear it when the line changes from outside — re-adding the same
+   * product from the search box moves focus first, and the blur handler
+   * resolves the draft on the way out.
+   */
+  const [draft, setDraft] = useState<string | null>(null);
+
   const unitPrice = line.actualSellingPrice ?? line.suggestedPrice;
   const discounted =
     line.actualSellingPrice !== null &&
@@ -449,18 +461,52 @@ function CartRow({
             max={line.quantityAvailable}
             step={1}
             inputMode="numeric"
-            value={line.quantity}
+            value={draft ?? line.quantity}
             onChange={(event) => {
-              const next = Number(event.target.value);
+              const raw = event.target.value;
 
-              // Clamped to available stock so the cart cannot be built into a
-              // sale the server will refuse. record_sale() checks again anyway,
-              // against the locked rows.
-              onChange({
-                quantity: Number.isFinite(next)
-                  ? Math.max(1, Math.min(next, line.quantityAvailable))
-                  : 1,
-              });
+              // The field shows the draft while it is being edited, so it can
+              // be emptied. Committing on every keystroke instead is what made
+              // the box unclearable: Number("") is 0, not NaN, so deleting the
+              // "1" clamped straight back to 1 and the next digit appended to
+              // it — typing 5 gave 15.
+              setDraft(raw);
+
+              // The cart still follows along as the user types, but only while
+              // the value is a legal quantity, so the estimated total never
+              // shows a figure the sale could not be recorded at. Anything else
+              // waits for blur. Either way this is a convenience: record_sale()
+              // re-checks availability against locked rows, which is what makes
+              // two tills selling the last unit safe.
+              const parsed = Number(raw);
+
+              if (
+                Number.isInteger(parsed) &&
+                parsed >= 1 &&
+                parsed <= line.quantityAvailable
+              ) {
+                onChange({ quantity: parsed });
+              }
+            }}
+            onBlur={(event) => {
+              // Leaving the field resolves whatever is in it. Empty is checked
+              // before parsing rather than left to Number(): Number("") is 0,
+              // not NaN, so an isFinite test would treat a cleared box as a
+              // real zero and only reach 1 by way of the clamp below. That is
+              // the same trap that made the field unclearable to begin with.
+              const raw = event.target.value.trim();
+              const parsed = Number(raw);
+
+              const quantity =
+                raw === "" || !Number.isFinite(parsed)
+                  ? 1
+                  : Math.max(
+                      1,
+                      Math.min(Math.round(parsed), line.quantityAvailable),
+                    );
+
+              onChange({ quantity });
+              setDraft(null);
             }}
           />
         </Field>
