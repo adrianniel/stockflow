@@ -546,6 +546,11 @@ export async function recordSale(
     revalidatePath("/dashboard/sales");
     revalidatePath("/dashboard/inventory");
     revalidatePath("/dashboard/reports");
+    // The day-detail route separately: revalidating the parent path does not
+    // reach its children, and the sale just recorded belongs to one of them.
+    // The segment form drops every date at once, which is right — we would
+    // otherwise have to know which local day the server filed it under.
+    revalidatePath("/dashboard/reports/[date]", "page");
     revalidatePath("/dashboard/owner");
     revalidatePath("/dashboard/assistant");
 
@@ -793,6 +798,10 @@ export async function recordPayment(
     }
 
     revalidatePath("/dashboard/reports");
+    // Two days can be affected — the day the money came in and the day the sale
+    // was originally made — so the whole segment is dropped rather than guessed
+    // at. See the note in recordSale.
+    revalidatePath("/dashboard/reports/[date]", "page");
     revalidatePath("/dashboard/owner");
     revalidatePath("/dashboard/assistant");
 

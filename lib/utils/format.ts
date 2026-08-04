@@ -33,6 +33,11 @@ const dateAndTime = new Intl.DateTimeFormat("en-PH", {
   minute: "2-digit",
 });
 
+const timeOnly = new Intl.DateTimeFormat("en-PH", {
+  hour: "numeric",
+  minute: "2-digit",
+});
+
 export function toNumber(value: string | number | null | undefined): number {
   if (value === null || value === undefined || value === "") {
     return 0;
@@ -87,10 +92,51 @@ export function formatDate(value: string | null | undefined) {
   return dateOnly.format(new Date(value));
 }
 
+/**
+ * Formats a plain YYYY-MM-DD calendar day.
+ *
+ * Not `formatDate`: the spec parses a date-only string as UTC midnight, so a
+ * runtime in any zone behind UTC renders the previous day. These keys are
+ * calendar days with no instant attached — they come from the reports URL and
+ * from local-date bucketing — so the parts are passed separately and the day
+ * shown is always the day that was asked for.
+ *
+ * Anything not shaped like a date key is returned as-is rather than guessed at.
+ */
+export function formatDateKey(value: string | null | undefined) {
+  if (!value) {
+    return "—";
+  }
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+
+  if (!match) {
+    return value;
+  }
+
+  return dateOnly.format(
+    new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])),
+  );
+}
+
 export function formatDateTime(value: string | null | undefined) {
   if (!value) {
     return "—";
   }
 
   return dateAndTime.format(new Date(value));
+}
+
+/**
+ * Clock time alone, for lists already grouped under one date.
+ *
+ * Repeating the date on every row of a single day's table is noise, and slicing
+ * it off `formatDateTime` output would depend on the locale's separator.
+ */
+export function formatTime(value: string | null | undefined) {
+  if (!value) {
+    return "—";
+  }
+
+  return timeOnly.format(new Date(value));
 }

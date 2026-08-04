@@ -1,6 +1,15 @@
 import { toNumber } from "@/lib/utils/format";
 
 import type { ShopContext } from "./context";
+import {
+  addDays,
+  dateKey,
+  daysBetween,
+  parseDateKey,
+  startOfDay,
+  type ReportRange,
+  type SaleFilter,
+} from "./report-range";
 import type { PaymentStatus } from "./types";
 
 /**
@@ -17,10 +26,29 @@ import type { PaymentStatus } from "./types";
  * reported as one rather than clamped.
  */
 
+/**
+ * Ceiling on rows fetched for one aggregate.
+ *
+ * PostgREST caps responses at `max_rows` (1000, supabase/config.toml) and gives
+ * no signal that it did. Asking for one more row than we intend to allow turns
+ * that silent truncation into something detectable: if a query comes back at
+ * this length, the range held more data than the aggregation can see and the
+ * caller throws rather than reporting a total that is quietly too low.
+ */
+const ROW_CEILING = 900;
+
 export type SalesSummary = {
   saleCount: number;
   itemCount: number;
   totalSales: number;
+  /**
+   * Capital tied up in what was sold: revenue minus profit.
+   *
+   * Derived rather than summed because `sale_items.profit` is already stored
+   * per line against the batch price actually paid, so revenue - profit is the
+   * cost of those exact units. Nothing extra has to be fetched for it.
+   */
+  totalCost: number;
   totalProfit: number;
   /**
    * Cash actually received in this range, from `sale_payments.collected_at`.
@@ -55,10 +83,14 @@ export type DashboardSummary = {
 };
 
 export type ProfitReport = {
+  /** The range these figures cover, echoed back for the page's own labelling. */
+  range: ReportRange;
+  /** Totals across the whole range. */
+  total: SalesSummary;
   today: SalesSummary;
   last7Days: SalesSummary;
   thisMonth: SalesSummary;
-  /** Newest first, for the daily breakdown table. */
+  /** Newest first, for the daily breakdown table. One row per day in range. */
   dailyBreakdown: Array<{ date: string; summary: SalesSummary }>;
   topProducts: Array<{
     productName: string;
@@ -68,6 +100,46 @@ export type ProfitReport = {
   }>;
 };
 
+/** One day, split into what was sold and what was collected. */
+export type DayDetail = {
+  date: string;
+  /** Sales recorded on this date, keyed on sale_date. */
+  sales: DaySale[];
+  /** Payments received on this date, keyed on collected_at. */
+  collections: DayCollection[];
+  /** Accrual figures for the sales above. */
+  summary: SalesSummary;
+};
+
+export type DaySale = {
+  id: string;
+  saleDate: string | null;
+  total: number;
+  cost: number;
+  profit: number;
+  paid: number;
+  itemCount: number;
+  paymentStatus: PaymentStatus;
+  sellerName: string | null;
+  customerName: string | null;
+};
+
+export type DayCollection = {
+  id: string;
+  saleId: string;
+  amount: number;
+  collectedAt: string;
+  note: string | null;
+  collectedByName: string | null;
+  customerName: string | null;
+  /**
+   * True when the parent sale was made on a different day. These are the rows
+   * that make a day's collections exceed its sales, so the page marks them
+   * rather than leaving the discrepancy unexplained.
+   */
+  fromEarlierSale: boolean;
+};
+
 /** A product at or below this many units is flagged as low stock. */
 const LOW_STOCK_THRESHOLD = 5;
 
@@ -75,33 +147,15 @@ const EMPTY_SUMMARY: SalesSummary = {
   saleCount: 0,
   itemCount: 0,
   totalSales: 0,
+  totalCost: 0,
   totalProfit: 0,
   totalCollected: 0,
   outstanding: 0,
 };
 
-function startOfDay(date: Date): Date {
-  const copy = new Date(date);
-  copy.setHours(0, 0, 0, 0);
-
-  return copy;
-}
-
-function addDays(date: Date, days: number): Date {
-  const copy = new Date(date);
-  copy.setDate(copy.getDate() + days);
-
-  return copy;
-}
-
-/** Local calendar date as YYYY-MM-DD, used to bucket sales by day. */
-function localDateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-}
+// startOfDay, addDays and the YYYY-MM-DD key live in report-range.ts, which
+// owns every local-date decision so the URL and the aggregation cannot disagree
+// about where a day begins.
 
 type SaleAggregateRow = {
   id: string;
@@ -118,13 +172,18 @@ type SaleAggregateRow = {
  *
  * Half-open so that consecutive ranges neither overlap nor leave a gap: a sale
  * at exactly midnight belongs to the day starting then, once.
+ *
+ * `filter` narrows by payment status. It applies to sales only — collections
+ * are never filtered this way, since a payment has no status of its own and its
+ * parent's changes as it is paid off.
  */
 async function loadSales(
   { supabase, shopId }: ShopContext,
   from: Date,
   to: Date,
+  filter: SaleFilter = "all",
 ): Promise<SaleAggregateRow[]> {
-  const { data, error } = await supabase
+  let query = supabase
     .from("sales")
     .select(
       `
@@ -139,14 +198,51 @@ async function loadSales(
     )
     .eq("shop_id", shopId)
     .gte("sale_date", from.toISOString())
-    .lt("sale_date", to.toISOString())
-    .order("sale_date", { ascending: false });
+    .lt("sale_date", to.toISOString());
+
+  if (filter !== "all") {
+    query = query.eq("payment_status", filter);
+  }
+
+  const { data, error } = await query
+    .order("sale_date", { ascending: false })
+    .limit(ROW_CEILING);
 
   if (error) {
     throw error;
   }
 
-  return (data ?? []) as SaleAggregateRow[];
+  const rows = (data ?? []) as SaleAggregateRow[];
+
+  assertNotTruncated(rows.length, "sales", from, to);
+
+  return rows;
+}
+
+/**
+ * Fails loudly when a result may have been cut short.
+ *
+ * Every figure on the reports page is summed from rows fetched here, so a
+ * truncated result does not produce a visibly broken page — it produces a
+ * plausible one with totals that are too low. That is the worst outcome
+ * available: an owner reconciling a drawer against an under-reported total has
+ * no way to tell the report is wrong. Throwing surfaces it as an error boundary
+ * instead, which is recoverable by narrowing the range.
+ */
+function assertNotTruncated(
+  count: number,
+  what: string,
+  from: Date,
+  to: Date,
+): void {
+  if (count < ROW_CEILING) {
+    return;
+  }
+
+  throw new Error(
+    `Too many ${what} between ${dateKey(from)} and ${dateKey(to)} to total accurately ` +
+      `(${ROW_CEILING}+ rows). Choose a shorter date range.`,
+  );
 }
 
 type PaymentAggregateRow = {
@@ -170,13 +266,18 @@ async function loadPayments(
     .select("amount, collected_at")
     .eq("shop_id", shopId)
     .gte("collected_at", from.toISOString())
-    .lt("collected_at", to.toISOString());
+    .lt("collected_at", to.toISOString())
+    .limit(ROW_CEILING);
 
   if (error) {
     throw error;
   }
 
-  return (data ?? []) as PaymentAggregateRow[];
+  const rows = (data ?? []) as PaymentAggregateRow[];
+
+  assertNotTruncated(rows.length, "payments", from, to);
+
+  return rows;
 }
 
 function sumPayments(rows: PaymentAggregateRow[]): number {
@@ -196,6 +297,7 @@ function summarize(
   const summary = rows.reduce<SalesSummary>((summary, row) => {
     const total = toNumber(row.total_amount);
     const paid = toNumber(row.amount_paid);
+    const profit = toNumber(row.total_profit);
 
     return {
       saleCount: summary.saleCount + 1,
@@ -203,7 +305,10 @@ function summarize(
         summary.itemCount +
         (row.sale_items ?? []).reduce((sum, item) => sum + item.quantity, 0),
       totalSales: summary.totalSales + total,
-      totalProfit: summary.totalProfit + toNumber(row.total_profit),
+      // Revenue minus profit is what those units cost the shop, per the note on
+      // SalesSummary.totalCost.
+      totalCost: summary.totalCost + (total - profit),
+      totalProfit: summary.totalProfit + profit,
       totalCollected: 0,
       outstanding: summary.outstanding + (total - paid),
     };
@@ -291,29 +396,37 @@ export async function getDashboardSummary(
 }
 
 /**
- * Daily, weekly and monthly figures plus a per-day breakdown (SRS 12).
+ * Figures for a chosen range, plus a per-day breakdown (SRS 12).
  *
- * Fetches the widest range once and derives the narrower ones in memory, so the
- * three headline numbers and the table cost a single query.
+ * Fetches the range once and derives every narrower figure in memory, so the
+ * whole page costs two queries plus the product ranking regardless of how many
+ * days are shown.
+ *
+ * Today / last 7 days / this month are always included even when the chosen
+ * range does not contain them, because they are the figures an owner checks
+ * first. When the range excludes them they simply come out empty, which is
+ * accurate: the query covers the range that was asked for. They are computed by
+ * intersecting with the range rather than by a second fetch.
  */
 export async function getProfitReport(
   context: ShopContext,
+  range: ReportRange,
 ): Promise<ProfitReport> {
   const now = new Date();
   const todayStart = startOfDay(now);
-  const tomorrowStart = addDays(todayStart, 1);
 
   // "Last 7 days" includes today, so it starts 6 days back.
   const weekStart = addDays(todayStart, -6);
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  // Whichever boundary reaches furthest back covers all three ranges.
-  const rangeStart = weekStart < monthStart ? weekStart : monthStart;
-
   const [rows, payments] = await Promise.all([
-    loadSales(context, rangeStart, tomorrowStart),
-    loadPayments(context, rangeStart, tomorrowStart),
+    loadSales(context, range.from, range.to, range.filter),
+    loadPayments(context, range.from, range.to),
   ]);
+
+  // Clamped to the range so a headline figure never counts a day the range does
+  // not cover, and never claims data the query did not fetch.
+  const withinRange = (from: Date) => (from > range.from ? from : range.from);
 
   const inRange = (row: SaleAggregateRow, from: Date) =>
     row.sale_date !== null && new Date(row.sale_date) >= from;
@@ -323,6 +436,21 @@ export async function getProfitReport(
       payments.filter((payment) => new Date(payment.collected_at) >= from),
     );
 
+  const summaryFrom = (from: Date) => {
+    // A boundary after the range's end selects nothing, which is right: asking
+    // for "today" inside a range that ended last week has no sales in it.
+    if (from >= range.to) {
+      return { ...EMPTY_SUMMARY };
+    }
+
+    const start = withinRange(from);
+
+    return summarize(
+      rows.filter((row) => inRange(row, start)),
+      collectedSince(start),
+    );
+  };
+
   const byDay = new Map<string, SaleAggregateRow[]>();
 
   for (const row of rows) {
@@ -330,7 +458,7 @@ export async function getProfitReport(
       continue;
     }
 
-    const key = localDateKey(new Date(row.sale_date));
+    const key = dateKey(new Date(row.sale_date));
     const bucket = byDay.get(key);
 
     if (bucket) {
@@ -346,7 +474,7 @@ export async function getProfitReport(
   const collectedByDay = new Map<string, number>();
 
   for (const payment of payments) {
-    const key = localDateKey(new Date(payment.collected_at));
+    const key = dateKey(new Date(payment.collected_at));
 
     collectedByDay.set(
       key,
@@ -354,11 +482,14 @@ export async function getProfitReport(
     );
   }
 
-  // Every day in the last 7 gets a row, including days with no sales — a gap in
-  // the table reads as missing data rather than as a quiet day.
-  const dailyBreakdown = Array.from({ length: 7 }, (_, index) => {
-    const date = addDays(todayStart, -index);
-    const key = localDateKey(date);
+  // Every day in the range gets a row, including days with no sales — a gap in
+  // the table reads as missing data rather than as a quiet day. Newest first,
+  // which is the order an owner reads a report in.
+  const dayCount = daysBetween(range.from, range.to);
+  const lastDay = addDays(range.to, -1);
+
+  const dailyBreakdown = Array.from({ length: dayCount }, (_, index) => {
+    const key = dateKey(addDays(lastDay, -index));
 
     return {
       date: key,
@@ -367,20 +498,192 @@ export async function getProfitReport(
   });
 
   return {
-    today: summarize(
-      rows.filter((row) => inRange(row, todayStart)),
-      collectedSince(todayStart),
-    ),
-    last7Days: summarize(
-      rows.filter((row) => inRange(row, weekStart)),
-      collectedSince(weekStart),
-    ),
-    thisMonth: summarize(
-      rows.filter((row) => inRange(row, monthStart)),
-      collectedSince(monthStart),
-    ),
+    range,
+    total: summarize(rows, sumPayments(payments)),
+    today: summaryFrom(todayStart),
+    last7Days: summaryFrom(weekStart),
+    thisMonth: summaryFrom(monthStart),
     dailyBreakdown,
-    topProducts: await getTopProducts(context, monthStart, tomorrowStart),
+    // Ranked over the chosen range rather than a fixed month, so the table
+    // agrees with the rest of the page.
+    topProducts: await getTopProducts(context, range.from, range.to),
+  };
+}
+
+type DaySaleRow = {
+  id: string;
+  total_amount: string;
+  total_profit: string;
+  amount_paid: string;
+  payment_status: PaymentStatus;
+  sale_date: string | null;
+  users: { name: string | null } | { name: string | null }[] | null;
+  customers: { name: string } | { name: string }[] | null;
+  sale_items: Array<{ quantity: number }> | null;
+};
+
+type DayPaymentRow = {
+  id: string;
+  sale_id: string;
+  amount: string;
+  collected_at: string;
+  note: string | null;
+  users: { name: string | null } | { name: string | null }[] | null;
+  sales: {
+    sale_date: string | null;
+    customers: { name: string } | { name: string }[] | null;
+  } | Array<{
+    sale_date: string | null;
+    customers: { name: string } | { name: string }[] | null;
+  }> | null;
+};
+
+/** PostgREST returns an embedded row as an object or a one-element array. */
+function firstOf<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
+  return value ?? null;
+}
+
+/**
+ * Everything that happened on one day, split by what the two figures mean.
+ *
+ * `sales` is keyed on `sale_date` and `collections` on `collected_at`, and they
+ * are deliberately not reconciled with each other. A day can collect more than
+ * it sold — that is an instalment against an older utang arriving — and the two
+ * lists together are what explain the difference. `summary` describes the sales
+ * only, so the day's profit is the profit earned that day and does not move when
+ * an old debt is settled later.
+ */
+export async function getDayDetail(
+  context: ShopContext,
+  key: string,
+): Promise<DayDetail | null> {
+  const { supabase, shopId } = context;
+  const from = parseDateKey(key);
+
+  if (!from) {
+    return null;
+  }
+
+  const to = addDays(from, 1);
+
+  const [salesResult, paymentsResult] = await Promise.all([
+    supabase
+      .from("sales")
+      .select(
+        `
+        id,
+        total_amount,
+        total_profit,
+        amount_paid,
+        payment_status,
+        sale_date,
+        users ( name ),
+        customers ( name ),
+        sale_items ( quantity )
+      `,
+      )
+      .eq("shop_id", shopId)
+      .gte("sale_date", from.toISOString())
+      .lt("sale_date", to.toISOString())
+      .order("sale_date", { ascending: false })
+      .limit(ROW_CEILING),
+    supabase
+      .from("sale_payments")
+      .select(
+        `
+        id,
+        sale_id,
+        amount,
+        collected_at,
+        note,
+        users ( name ),
+        sales ( sale_date, customers ( name ) )
+      `,
+      )
+      .eq("shop_id", shopId)
+      .gte("collected_at", from.toISOString())
+      .lt("collected_at", to.toISOString())
+      .order("collected_at", { ascending: false })
+      .limit(ROW_CEILING),
+  ]);
+
+  if (salesResult.error) {
+    throw salesResult.error;
+  }
+
+  if (paymentsResult.error) {
+    throw paymentsResult.error;
+  }
+
+  const saleRows = (salesResult.data ?? []) as DaySaleRow[];
+  const paymentRows = (paymentsResult.data ?? []) as DayPaymentRow[];
+
+  assertNotTruncated(saleRows.length, "sales", from, to);
+  assertNotTruncated(paymentRows.length, "payments", from, to);
+
+  const sales: DaySale[] = saleRows.map((row) => {
+    const total = toNumber(row.total_amount);
+    const profit = toNumber(row.total_profit);
+
+    return {
+      id: row.id,
+      saleDate: row.sale_date,
+      total,
+      // Same derivation as SalesSummary.totalCost: profit is already stored
+      // against the batch price actually paid.
+      cost: total - profit,
+      profit,
+      paid: toNumber(row.amount_paid),
+      itemCount: (row.sale_items ?? []).reduce(
+        (sum, item) => sum + item.quantity,
+        0,
+      ),
+      paymentStatus: row.payment_status,
+      sellerName: firstOf(row.users)?.name ?? null,
+      customerName: firstOf(row.customers)?.name ?? null,
+    };
+  });
+
+  const collections: DayCollection[] = paymentRows.map((row) => {
+    const sale = firstOf(row.sales);
+    const saleDate = sale?.sale_date ?? null;
+
+    return {
+      id: row.id,
+      saleId: row.sale_id,
+      amount: toNumber(row.amount),
+      collectedAt: row.collected_at,
+      note: row.note,
+      collectedByName: firstOf(row.users)?.name ?? null,
+      customerName: firstOf(sale?.customers)?.name ?? null,
+      // Compared on the local calendar day, not on the instant, so a payment
+      // taken at 8am against a sale made at 11pm the night before is correctly
+      // marked as belonging to an earlier sale.
+      fromEarlierSale:
+        saleDate !== null && dateKey(new Date(saleDate)) !== key,
+    };
+  });
+
+  return {
+    date: key,
+    sales,
+    collections,
+    summary: {
+      saleCount: sales.length,
+      itemCount: sales.reduce((sum, sale) => sum + sale.itemCount, 0),
+      totalSales: sales.reduce((sum, sale) => sum + sale.total, 0),
+      totalCost: sales.reduce((sum, sale) => sum + sale.cost, 0),
+      totalProfit: sales.reduce((sum, sale) => sum + sale.profit, 0),
+      totalCollected: collections.reduce(
+        (sum, payment) => sum + payment.amount,
+        0,
+      ),
+      outstanding: sales.reduce((sum, sale) => sum + (sale.total - sale.paid), 0),
+    },
   };
 }
 
@@ -422,18 +725,26 @@ async function getTopProducts(
     )
     .eq("sales.shop_id", shopId)
     .gte("sales.sale_date", from.toISOString())
-    .lt("sales.sale_date", to.toISOString());
+    .lt("sales.sale_date", to.toISOString())
+    .limit(ROW_CEILING);
 
   if (error) {
     throw error;
   }
+
+  const rows = (data ?? []) as TopProductRow[];
+
+  // One sale contributes a row per line, so this ceiling is reached sooner than
+  // the sales one. Same reasoning: a truncated ranking is a wrong ranking, and
+  // it would not look wrong.
+  assertNotTruncated(rows.length, "sale items", from, to);
 
   const totals = new Map<
     string,
     { quantitySold: number; revenue: number; profit: number }
   >();
 
-  for (const row of (data ?? []) as TopProductRow[]) {
+  for (const row of rows) {
     const batch = Array.isArray(row.stock_batches)
       ? row.stock_batches[0]
       : row.stock_batches;

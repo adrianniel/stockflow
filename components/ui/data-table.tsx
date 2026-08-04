@@ -21,6 +21,17 @@ type DataTableProps<Row> = {
   emptyTitle?: string;
   emptyDescription?: string;
   emptyAction?: ReactNode;
+  /**
+   * Minimum table width before the horizontal scroll kicks in, as a Tailwind
+   * class.
+   *
+   * 640px suits the wider tables, but it forces a sideways scroll on a phone
+   * even when a table only has three narrow columns. Pass a smaller value for
+   * those so they fit the screen instead. Must be a literal at the call site —
+   * Tailwind generates arbitrary values by scanning source text, so a computed
+   * string would produce no CSS.
+   */
+  minWidth?: string;
 };
 
 /**
@@ -37,6 +48,7 @@ export function DataTable<Row>({
   emptyTitle = "Nothing here yet",
   emptyDescription = "Records will appear here once they are created.",
   emptyAction,
+  minWidth = "min-w-[640px]",
 }: DataTableProps<Row>) {
   if (rows.length === 0) {
     return (
@@ -50,7 +62,9 @@ export function DataTable<Row>({
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[640px] border-collapse text-left text-sm">
+      <table
+        className={cn("w-full border-collapse text-left text-sm", minWidth)}
+      >
         <thead>
           <tr className="border-b border-slate-200">
             {columns.map((column) => (
