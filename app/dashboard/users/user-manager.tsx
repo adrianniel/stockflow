@@ -67,6 +67,11 @@ export function UserManager({
             <span className="ml-2 text-xs text-slate-500">(you)</span>
           ) : null}
           <p className="text-xs text-slate-500">{row.email ?? "—"}</p>
+          {/* The Shop column is dropped on phones to leave room for Actions;
+              it reappears here so a row is still attributable to a shop. */}
+          <p className="text-xs text-slate-500 md:hidden">
+            {row.shopName ?? "No shop"}
+          </p>
         </div>
       ),
     },
@@ -76,6 +81,7 @@ export function UserManager({
     },
     {
       header: "Shop",
+      hideOnMobile: true,
       cell: (row) => row.shopName ?? "—",
     },
     {

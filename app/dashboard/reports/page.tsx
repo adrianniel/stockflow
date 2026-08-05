@@ -187,7 +187,7 @@ export default async function ReportsPage({
           rows={report.topProducts}
           columns={productColumns}
           rowKey={(row) => row.productName}
-          minWidth="min-w-[420px]"
+          minWidth="md:min-w-[420px]"
           emptyTitle="No sales in this range"
           emptyDescription="Product rankings appear once you have recorded sales in the selected dates."
         />

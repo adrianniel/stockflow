@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
@@ -70,9 +71,19 @@ export default async function DayDetailPage({
     {
       header: "Time",
       cell: (row) => (
-        <span className="font-medium text-slate-950">
+        // Doubles as the row's link on phones, where the trailing View button
+        // is hidden. The customer rides along underneath for the same reason —
+        // its own column is gone at that width, and "who bought this" is the
+        // one thing you cannot identify a row without.
+        <Link
+          href={`/dashboard/sales/${row.id}`}
+          className="block font-medium text-slate-950 hover:underline"
+        >
           {formatTime(row.saleDate)}
-        </span>
+          <span className="block text-xs font-normal text-slate-500 md:hidden">
+            {row.customerName ?? "Walk-in"}
+          </span>
+        </Link>
       ),
     },
     {
@@ -126,6 +137,7 @@ export default async function DayDetailPage({
     {
       header: "",
       align: "right",
+      hideOnMobile: true,
       cell: (row) => (
         <ButtonLink href={`/dashboard/sales/${row.id}`} variant="ghost" size="sm">
           View
@@ -138,14 +150,32 @@ export default async function DayDetailPage({
     {
       header: "Time",
       cell: (row) => (
-        <span className="font-medium text-slate-950">
+        <Link
+          href={`/dashboard/sales/${row.saleId}`}
+          className="block font-medium text-slate-950 hover:underline"
+        >
           {formatTime(row.collectedAt)}
-        </span>
+        </Link>
       ),
     },
     {
       header: "Customer",
-      cell: (row) => row.customerName ?? "—",
+      cell: (row) => (
+        <>
+          {row.customerName ?? "—"}
+          {/*
+            The Against column is hidden on phones, but it carries the reason
+            this panel exists — that a day can collect more than it sold. Losing
+            it there would leave the number unexplained, so the marker repeats
+            here at the width where the column is gone.
+          */}
+          {row.fromEarlierSale ? (
+            <span className="mt-1 block text-xs font-medium text-amber-700 md:hidden">
+              Earlier sale
+            </span>
+          ) : null}
+        </>
+      ),
     },
     {
       header: "Against",
@@ -179,6 +209,7 @@ export default async function DayDetailPage({
     {
       header: "",
       align: "right",
+      hideOnMobile: true,
       cell: (row) => (
         <ButtonLink
           href={`/dashboard/sales/${row.saleId}`}

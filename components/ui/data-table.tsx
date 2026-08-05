@@ -25,11 +25,15 @@ type DataTableProps<Row> = {
    * Minimum table width before the horizontal scroll kicks in, as a Tailwind
    * class.
    *
-   * 640px suits the wider tables, but it forces a sideways scroll on a phone
-   * even when a table only has three narrow columns. Pass a smaller value for
-   * those so they fit the screen instead. Must be a literal at the call site —
-   * Tailwind generates arbitrary values by scanning source text, so a computed
-   * string would produce no CSS.
+   * Deliberately `md:`-prefixed. Below that breakpoint `hideOnMobile` has
+   * already removed the optional columns, so imposing a 640px floor there only
+   * forces a sideways scroll on a table that would otherwise have fit. Leaving
+   * the floor off on phones lets the table take exactly the width its remaining
+   * content needs — narrow tables fit, wide ones still scroll, but only by the
+   * amount they actually overflow.
+   *
+   * Must be a literal at the call site: Tailwind generates arbitrary values by
+   * scanning source text, so a computed string would produce no CSS.
    */
   minWidth?: string;
 };
@@ -48,7 +52,7 @@ export function DataTable<Row>({
   emptyTitle = "Nothing here yet",
   emptyDescription = "Records will appear here once they are created.",
   emptyAction,
-  minWidth = "min-w-[640px]",
+  minWidth = "md:min-w-[640px]",
 }: DataTableProps<Row>) {
   if (rows.length === 0) {
     return (
@@ -72,7 +76,7 @@ export function DataTable<Row>({
                 key={column.header}
                 scope="col"
                 className={cn(
-                  "px-3 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500",
+                  "px-2 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 md:px-3",
                   column.align === "right" && "text-right",
                   column.hideOnMobile && "hidden md:table-cell",
                 )}
@@ -93,7 +97,7 @@ export function DataTable<Row>({
                 <td
                   key={column.header}
                   className={cn(
-                    "px-3 py-4 align-middle text-slate-700",
+                    "px-2 py-4 align-middle text-slate-700 md:px-3",
                     column.align === "right" && "text-right",
                     column.hideOnMobile && "hidden md:table-cell",
                   )}
