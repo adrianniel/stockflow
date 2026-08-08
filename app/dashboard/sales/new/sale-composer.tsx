@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -16,21 +17,31 @@ import type {
   Customer,
   InventoryLine,
   PaymentStatus,
+  SellableBatch,
 } from "@/lib/shop/types";
-import { formatCurrency } from "@/lib/utils/format";
+import { formatCurrency, formatDateKey } from "@/lib/utils/format";
 
 /**
  * The till: build a cart, adjust prices, take payment.
  *
- * The totals here are an estimate, and the code says so where it matters. The
- * real figures come from `record_sale()`, which walks the actual batches under
- * row locks — a line spanning two batches at different capital prices has a
- * profit this component cannot know, since it only sees the first batch's
- * price. Showing an estimated total is right for the customer conversation;
+ * A cart line is one product out of one batch. The batch is chosen for the user
+ * when there is only one in stock, and offered when there is more than one —
+ * pre-selected on the oldest, so the default sale deducts exactly what FIFO
+ * would have deducted anyway and the fast path stays one tap.
+ *
+ * Selling more than one batch holds means adding the product again on the next
+ * batch. That is deliberate rather than a limitation: the two halves come out
+ * at different capital prices, so they are two lines of profit, and the user
+ * should see that before agreeing a price rather than after.
+ *
+ * The totals here are an estimate and the code says so where it matters. The
+ * real figures come from `record_sale()`, which re-reads the batches under row
+ * locks — the quantities on this page were true at page load and nothing keeps
+ * them fresh. Showing an estimate is right for the customer conversation;
  * storing one would be wrong, so nothing computed here is submitted.
  *
- * What is submitted is the cart: product ids, quantities, and any price
- * override. The server derives everything else.
+ * What is submitted is the cart: product ids, batch ids, quantities, and any
+ * price override. The server derives everything else.
  */
 export function SaleComposer({
   products,
@@ -42,6 +53,15 @@ export function SaleComposer({
   const router = useRouter();
   const [lines, setLines] = useState<CartLine[]>([]);
   const [search, setSearch] = useState("");
+  /**
+   * The product whose batches are on screen, or null when none is being picked.
+   *
+   * Only ever set for products with more than one batch in stock — with a
+   * single batch there is nothing to choose, so the line is added outright.
+   */
+  const [pendingProduct, setPendingProduct] = useState<InventoryLine | null>(
+    null,
+  );
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("PAID");
   const [customerId, setCustomerId] = useState("");
   const [state, formAction] = useActionState(recordSale, IDLE);
@@ -61,6 +81,7 @@ export function SaleComposer({
     if (state.status === "success") {
       setLines([]);
       setSearch("");
+      setPendingProduct(null);
       setPaymentStatus("PAID");
       setCustomerId("");
     }
@@ -90,15 +111,28 @@ export function SaleComposer({
       .slice(0, 8);
   }, [products, search]);
 
-  function addProduct(product: InventoryLine) {
-    setLines((current) => {
-      const existing = current.find((line) => line.productId === product.productId);
+  function selectProduct(product: InventoryLine) {
+    // One batch is not a choice. Anything else gets the picker, already sitting
+    // on the oldest batch.
+    if (product.batches.length === 1) {
+      addBatch(product, product.batches[0]);
+      return;
+    }
 
-      // Re-adding the same product bumps its quantity rather than creating a
-      // second line, but never past what is actually in stock.
+    setPendingProduct(product);
+  }
+
+  function addBatch(product: InventoryLine, batch: SellableBatch) {
+    setLines((current) => {
+      const existing = current.find((line) => line.stockBatchId === batch.id);
+
+      // Re-adding the same batch bumps its quantity rather than creating a
+      // second line, but never past what that batch holds. The same product on
+      // a *different* batch is a separate line — that is how a quantity larger
+      // than any one batch gets sold.
       if (existing) {
         return current.map((line) =>
-          line.productId === product.productId
+          line.stockBatchId === batch.id
             ? {
                 ...line,
                 quantity: Math.min(line.quantity + 1, line.quantityAvailable),
@@ -112,27 +146,33 @@ export function SaleComposer({
         {
           productId: product.productId,
           productName: product.productName,
+          stockBatchId: batch.id,
+          batchNumber: batch.batchNumber,
+          batchReceivedDate: batch.receivedDate,
           quantity: 1,
           actualSellingPrice: null,
-          suggestedPrice: product.currentSellingPrice ?? 0,
-          quantityAvailable: product.quantityOnHand,
+          suggestedPrice: batch.sellingPrice,
+          quantityAvailable: batch.quantityRemaining,
         },
       ];
     });
 
     setSearch("");
+    setPendingProduct(null);
   }
 
-  function updateLine(productId: string, changes: Partial<CartLine>) {
+  function updateLine(stockBatchId: string, changes: Partial<CartLine>) {
     setLines((current) =>
       current.map((line) =>
-        line.productId === productId ? { ...line, ...changes } : line,
+        line.stockBatchId === stockBatchId ? { ...line, ...changes } : line,
       ),
     );
   }
 
-  function removeLine(productId: string) {
-    setLines((current) => current.filter((line) => line.productId !== productId));
+  function removeLine(stockBatchId: string) {
+    setLines((current) =>
+      current.filter((line) => line.stockBatchId !== stockBatchId),
+    );
   }
 
   const estimatedTotal = lines.reduce(
@@ -162,13 +202,21 @@ export function SaleComposer({
           description="Search by product name or brand. Only products with stock on hand appear."
         />
 
-        <ProductSearch
-          search={search}
-          onSearchChange={setSearch}
-          matches={matches}
-          onSelect={addProduct}
-          hasProducts={products.length > 0}
-        />
+        {pendingProduct ? (
+          <BatchPicker
+            product={pendingProduct}
+            onPick={(batch) => addBatch(pendingProduct, batch)}
+            onCancel={() => setPendingProduct(null)}
+          />
+        ) : (
+          <ProductSearch
+            search={search}
+            onSearchChange={setSearch}
+            matches={matches}
+            onSelect={selectProduct}
+            hasProducts={products.length > 0}
+          />
+        )}
       </Panel>
 
       <Panel>
@@ -181,10 +229,10 @@ export function SaleComposer({
           <div className="space-y-3">
             {lines.map((line) => (
               <CartRow
-                key={line.productId}
+                key={line.stockBatchId}
                 line={line}
-                onChange={(changes) => updateLine(line.productId, changes)}
-                onRemove={() => removeLine(line.productId)}
+                onChange={(changes) => updateLine(line.stockBatchId, changes)}
+                onRemove={() => removeLine(line.stockBatchId)}
               />
             ))}
           </div>
@@ -392,6 +440,12 @@ function ProductSearch({
                     <span className="block text-xs text-slate-500">
                       {product.brand ? `${product.brand} · ` : ""}
                       {product.quantityOnHand} in stock
+                      {/* Says a picker is coming, so the extra tap is expected
+                          rather than a surprise. One batch adds straight to the
+                          cart and needs no warning. */}
+                      {product.batches.length > 1
+                        ? ` · ${product.batches.length} batches`
+                        : ""}
                     </span>
                   </span>
 
@@ -410,6 +464,84 @@ function ProductSearch({
           </p>
         )
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * The batches of one product, for the user to pick which one leaves the shelf.
+ *
+ * `product.batches` arrives oldest-first from the query, so the first entry is
+ * the one `record_sale()` would have taken on its own. It is badged and focused
+ * on mount: pressing Enter therefore reproduces the old FIFO behaviour exactly,
+ * and choosing anything else is a deliberate act.
+ *
+ * Every batch shows its reference, received date, quantity and selling price.
+ * References are free-form and may repeat between arrivals, so the reference on
+ * its own is not enough to tell two rows apart.
+ */
+function BatchPicker({
+  product,
+  onPick,
+  onCancel,
+}: {
+  product: InventoryLine;
+  onPick: (batch: SellableBatch) => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="font-medium text-slate-950">{product.productName}</p>
+          <p className="text-xs text-slate-500">
+            {product.brand ? `${product.brand} · ` : ""}
+            Choose the batch this sale comes out of
+          </p>
+        </div>
+
+        <Button variant="ghost" size="sm" onClick={onCancel}>
+          Back to search
+        </Button>
+      </div>
+
+      <ul className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200">
+        {product.batches.map((batch, index) => (
+          <li key={batch.id}>
+            <button
+              type="button"
+              // Only the first: autoFocus on every row would leave focus on the
+              // last one rendered, which is the newest batch — the opposite of
+              // the FIFO default.
+              autoFocus={index === 0}
+              onClick={() => onPick(batch)}
+              className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 text-left transition hover:bg-slate-50"
+            >
+              <span>
+                <span className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium text-slate-950">
+                    Ref {batch.batchNumber}
+                  </span>
+                  {index === 0 ? <Badge>Oldest</Badge> : null}
+                </span>
+                <span className="mt-1 block text-xs text-slate-500">
+                  Received {formatDateKey(batch.receivedDate)} ·{" "}
+                  {batch.quantityRemaining} available
+                </span>
+              </span>
+
+              <span className="text-sm font-medium text-slate-700">
+                {formatCurrency(batch.sellingPrice)}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      <p className="px-1 text-xs text-slate-500">
+        Selling more than one batch holds? Add the product again and pick the
+        next batch — each batch is its own line, at its own cost.
+      </p>
     </div>
   );
 }
@@ -445,9 +577,15 @@ function CartRow({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="font-medium text-slate-950">{line.productName}</p>
+          {/* Which batch, spelled out: the same product can sit on two lines at
+              two prices, and the reference alone may not tell them apart. */}
+          <p className="text-xs text-slate-500">
+            Ref {line.batchNumber} · received{" "}
+            {formatDateKey(line.batchReceivedDate)}
+          </p>
           <p className="text-xs text-slate-500">
             Suggested {formatCurrency(line.suggestedPrice)} ·{" "}
-            {line.quantityAvailable} in stock
+            {line.quantityAvailable} left in this batch
           </p>
         </div>
 
@@ -457,9 +595,12 @@ function CartRow({
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <Field label="Quantity" htmlFor={`qty-${line.productId}`}>
+        {/* Keyed on the batch, not the product: two lines of the same product
+            would otherwise share a DOM id and both labels would point at the
+            first input. */}
+        <Field label="Quantity" htmlFor={`qty-${line.stockBatchId}`}>
           <Input
-            id={`qty-${line.productId}`}
+            id={`qty-${line.stockBatchId}`}
             type="number"
             min={1}
             max={line.quantityAvailable}
@@ -517,11 +658,11 @@ function CartRow({
 
         <Field
           label="Price each"
-          htmlFor={`price-${line.productId}`}
+          htmlFor={`price-${line.stockBatchId}`}
           hint={discounted ? "Adjusted" : "Leave blank for suggested"}
         >
           <Input
-            id={`price-${line.productId}`}
+            id={`price-${line.stockBatchId}`}
             type="number"
             min={0}
             step="0.01"

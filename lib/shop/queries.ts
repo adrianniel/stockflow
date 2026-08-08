@@ -225,6 +225,7 @@ export async function listBatchesForProduct(
 type InventoryBatchRow = {
   id: string;
   product_id: string;
+  batch_number: string;
   quantity_remaining: number;
   capital_price: string;
   selling_price: string;
@@ -253,6 +254,7 @@ export async function listInventory(
         `
         id,
         product_id,
+        batch_number,
         quantity_remaining,
         capital_price,
         selling_price,
@@ -310,6 +312,15 @@ export async function listInventory(
       currentSellingPrice: inStock[0]
         ? toNumber(inStock[0].selling_price)
         : null,
+      // Still in FIFO order, so the till can pre-select `batches[0]` and get
+      // the same batch record_sale() would have chosen on its own.
+      batches: inStock.map((batch) => ({
+        id: batch.id,
+        batchNumber: batch.batch_number,
+        receivedDate: batch.received_date,
+        quantityRemaining: batch.quantity_remaining,
+        sellingPrice: toNumber(batch.selling_price),
+      })),
     };
   });
 }

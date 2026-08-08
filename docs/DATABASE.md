@@ -521,7 +521,9 @@ CREDIT
 
 Stores individual products inside a sale transaction.
 
-A single sale may use multiple stock batches because of FIFO deduction.
+A single sale may use multiple stock batches — either because FIFO spanned them,
+or because the staff added the same product twice and picked a different batch
+each time.
 
 ---
 
@@ -641,7 +643,13 @@ must automatically decrease.
 
 ## Rule 4: FIFO Deduction
 
-The oldest available inventory must be deducted first.
+The oldest available inventory must be deducted first, unless the sale names the
+batch it comes out of.
+
+A sale line may carry a `stock_batch_id`. When it does, that batch is deducted on
+its own and the sale is refused if it is short — the staff chose that batch and
+its capital price, and another batch would give a different profit. When it does
+not, the batches are taken oldest first as above. See Migration 022.
 
 ---
 

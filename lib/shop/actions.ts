@@ -415,18 +415,25 @@ type SaleItemInput = {
   product_id: string;
   quantity: number;
   actual_selling_price?: number;
+  /** Omitted to let record_sale() pick batches oldest-first. */
+  stock_batch_id?: string;
 };
 
 /**
  * Records a sale.
  *
- * The FIFO deduction, the stock check, the profit arithmetic and the per-batch
+ * The batch deduction, the stock check, the profit arithmetic and the per-batch
  * sale_items rows all happen inside `record_sale()`. This function only parses
  * the cart and forwards it, because doing the deduction here would mean reading
  * remaining quantities and then writing them back — and two tills selling the
  * last units at the same time would both pass that check and oversell. The
  * function holds row locks for the length of the transaction, which is the only
  * place that race can be closed.
+ *
+ * A line may name the batch it comes out of. When it does not, `record_sale()`
+ * falls back to FIFO. Either way the server decides what is deducted; a batch
+ * id here is a request, and it is checked against the shop and the product
+ * before anything is taken from it.
  *
  * The cart arrives as JSON in one field rather than as indexed form fields,
  * since it is built up client-side and its length varies.
@@ -482,6 +489,21 @@ export async function recordSale(
       }
 
       const item: SaleItemInput = { product_id: productId, quantity };
+
+      // Optional. An absent or blank batch means "whatever FIFO picks", which
+      // is what an older client sends and what the till sends when the product
+      // has nothing to choose between. A malformed one is rejected rather than
+      // dropped: silently falling back to FIFO would deduct a different batch
+      // than the user was shown, at a different capital price.
+      const batchId = line.stockBatchId;
+
+      if (batchId !== null && batchId !== undefined && batchId !== "") {
+        if (typeof batchId !== "string" || !isUuid(batchId)) {
+          return failure("One of the sale lines has an invalid batch.");
+        }
+
+        item.stock_batch_id = batchId;
+      }
 
       // Only sent when the user actually overrode the price. A discount below
       // capital price is permitted and records a real loss (SRS 10), so the

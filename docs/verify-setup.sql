@@ -88,7 +88,24 @@ required_columns(table_name, column_name, migration, consequence) AS (
 
         -- 20260801120700 — account provisioning
         ('users',            'status',               '20260801120700', 'Every login fails: requireSession() selects this'),
-        ('users',            'email',                '20260801120700', 'Assistants and Users pages error')
+        ('users',            'email',                '20260801120700', 'Assistants and Users pages error'),
+
+        -- 20260801120900 — customers
+        ('customers',        'id',                   '20260801120900', 'Credit page errors; credit and partial sales cannot be recorded'),
+        ('customers',        'shop_id',              '20260801120900', 'Credit page errors; credit and partial sales cannot be recorded'),
+        ('customers',        'name',                 '20260801120900', 'Credit page errors; credit and partial sales cannot be recorded'),
+        ('customers',        'phone',                '20260801120900', 'Credit page errors'),
+        ('customers',        'notes',                '20260801120900', 'Credit page errors'),
+        ('sales',            'customer_id',          '20260801120900', 'Sales and Credit pages error 42703; who owes what is unrecorded'),
+
+        -- 20260801121000 — payment ledger
+        ('sale_payments',    'id',                   '20260801121000', 'Recording any paid sale fails; collections cannot be logged'),
+        ('sale_payments',    'shop_id',              '20260801121000', 'Recording any paid sale fails; collections cannot be logged'),
+        ('sale_payments',    'sale_id',              '20260801121000', 'Recording any paid sale fails; collections cannot be logged'),
+        ('sale_payments',    'amount',               '20260801121000', 'Recording any paid sale fails; collections cannot be logged'),
+        ('sale_payments',    'collected_at',         '20260801121000', 'Payment dates are lost; a Day 2 collection cannot be dated'),
+        ('sale_payments',    'collected_by',         '20260801121000', 'Who took the payment is unrecorded'),
+        ('sale_payments',    'note',                 '20260801121000', 'Sale detail page errors')
 ),
 
 checks AS (
@@ -240,21 +257,71 @@ checks AS (
         ),
         'apply 20260801120800 — an owner could deactivate their own shop and lock out their whole team'
 
+    UNION ALL SELECT
+        'trigger: sales.amount_paid derived from ledger (20260801121100)',
+        EXISTS (
+            SELECT 1 FROM pg_trigger
+            -- to_regclass, not a ::regclass cast: the cast raises when the
+            -- table is absent, which would abort the whole script instead of
+            -- reporting one FAIL. This returns NULL and the row just fails.
+            WHERE tgrelid = to_regclass('public.sale_payments')
+              AND tgname = 'sale_payments_recompute'
+        ),
+        'apply 20260801121100 — amount_paid and payment_status stop tracking the payments actually taken, so balances owed are wrong'
+
+    UNION ALL SELECT
+        'function: record_payment exists (20260801121200)',
+        EXISTS (
+            SELECT 1 FROM pg_proc p
+            JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = 'public' AND p.proname = 'record_payment'
+        ),
+        'apply 20260801121200 — collecting on a credit sale fails'
+
+    UNION ALL SELECT
+        'index: batch reference NOT unique per product (20260801121300)',
+        NOT EXISTS (
+            SELECT 1 FROM pg_indexes
+            WHERE schemaname = 'public' AND tablename = 'stock_batches'
+              AND indexname = 'stock_batches_product_batch_number_key'
+        ),
+        'apply 20260801121300 — two arrivals of one product on the same day are refused with 23505'
+
+    -- The one check that cannot be inferred from shape. Migration 022 keeps the
+    -- signature, so record_sale() looks identical from outside — and the old
+    -- body ignores an unknown JSON key rather than erroring. A till that names a
+    -- batch would silently have its choice discarded and FIFO stock deducted
+    -- instead: a different batch, a different capital price, a different profit,
+    -- no error anywhere. So the body itself is inspected.
+    UNION ALL SELECT
+        'function: record_sale honours an explicit batch (20260801121400)',
+        EXISTS (
+            SELECT 1 FROM pg_proc p
+            JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = 'public' AND p.proname = 'record_sale'
+              -- The jsonb read specifically, not the bare column name: the old
+              -- body also contains "stock_batch_id", in the sale_items INSERT,
+              -- so matching that alone would pass on the unpatched function.
+              AND p.prosrc LIKE '%->>''stock_batch_id''%'
+        ),
+        'apply 20260801121400 BEFORE deploying the app — the till''s batch choice is silently ignored and FIFO stock is deducted at the wrong capital price, with no error'
+
     -- RLS is the whole security model; a table with it switched off is a leak
     -- between shops, not a missing feature.
     UNION ALL SELECT
-        'RLS enabled on all 8 tables',
+        'RLS enabled on all 10 tables',
         (
-            SELECT count(*) = 8
+            SELECT count(*) = 10
             FROM pg_tables
             WHERE schemaname = 'public'
               AND tablename IN (
                   'shops', 'users', 'categories', 'products',
-                  'stock_batches', 'sales', 'sale_items', 'stock_adjustments'
+                  'stock_batches', 'sales', 'sale_items', 'stock_adjustments',
+                  'customers', 'sale_payments'
               )
               AND rowsecurity
         ),
-        'DATA LEAK between shops'
+        'DATA LEAK between shops — unless a customers/sale_payments column above also FAILs, in which case the table is simply absent and that migration is the fix'
 )
 SELECT
     CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result,

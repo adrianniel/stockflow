@@ -47,6 +47,15 @@ export type StockBatch = {
   created_at: string | null;
 };
 
+/** One in-stock batch as the sale composer offers it. */
+export type SellableBatch = {
+  id: string;
+  batchNumber: string;
+  receivedDate: string | null;
+  quantityRemaining: number;
+  sellingPrice: number;
+};
+
 /**
  * One product's inventory position, aggregated across its batches.
  *
@@ -63,6 +72,8 @@ export type InventoryLine = {
   stockValue: number;
   /** Price a new sale would suggest — the oldest in-stock batch, per FIFO. */
   currentSellingPrice: number | null;
+  /** In-stock batches, oldest first. What the till offers for selection. */
+  batches: SellableBatch[];
 };
 
 export type Sale = {
@@ -175,13 +186,23 @@ export function isPaymentStatus(value: unknown): value is PaymentStatus {
   );
 }
 
-/** One line of a sale being composed in the browser, before it is submitted. */
+/**
+ * One line of a sale being composed in the browser, before it is submitted.
+ *
+ * A line is one product out of one batch, so the same product may appear on
+ * several lines — that is how a quantity larger than any single batch is sold.
+ * `stockBatchId` is what makes a line unique; the product id alone does not.
+ */
 export type CartLine = {
   productId: string;
   productName: string;
+  stockBatchId: string;
+  batchNumber: string;
+  batchReceivedDate: string | null;
   quantity: number;
   /** Blank means "use the batch's own selling price" (no discount). */
   actualSellingPrice: number | null;
   suggestedPrice: number;
+  /** Remaining in *this batch*, not across the product. */
   quantityAvailable: number;
 };

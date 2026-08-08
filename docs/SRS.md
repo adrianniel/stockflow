@@ -280,6 +280,7 @@ The system must allow users to:
 
 - Search products
 - Select available inventory
+- Choose which stock batch the sale is deducted from (see section 9)
 - Enter quantity
 - Adjust actual selling price
 - Save sales transaction
@@ -288,9 +289,9 @@ The system must allow users to:
 
 # 9. FIFO Inventory Deduction
 
-The system follows First In First Out (FIFO).
+The system follows First In First Out (FIFO) by default.
 
-When a product is sold:
+When a product is sold without naming a batch:
 
 The oldest available stock batch is deducted first.
 
@@ -315,6 +316,27 @@ Batch 001:
 
 Batch 002:
 5 pieces
+
+## Manual Batch Selection
+
+FIFO is the default, not the only option. The staff recording the sale may name
+the batch a line comes out of, because the oldest stock is not always the stock
+they can reach — the newer arrival may be at the front of the shelf, or the
+customer may be matching a part they bought before.
+
+Rules:
+
+- If a product has one available batch, that batch is used with no extra step.
+- If it has several, the batches are shown with reference, received date,
+  available quantity and selling price, pre-selected on the oldest. Accepting
+  the default deducts exactly what FIFO would have deducted.
+- A named batch is deducted on its own. If it does not hold the full quantity
+  the sale is refused rather than topped up from another batch, since the other
+  batch has a different capital price and therefore a different profit than the
+  one shown. The product is added again on the next batch instead, which is a
+  second line on the same sale.
+- A line that names no batch still follows FIFO across batches, exactly as
+  above.
 
 ---
 
@@ -423,7 +445,7 @@ YES:
 - Product management
 - Category management
 - Batch inventory
-- FIFO deduction
+- FIFO deduction, with manual batch selection
 - Sales recording
 - Profit calculation
 - Basic reports

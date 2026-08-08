@@ -643,7 +643,7 @@ Used for:
 
 ---
 
-# Migrations 008-021 — Application Development Phase
+# Migrations 008-022 — Application Development Phase
 
 Migrations 001-007 were applied through the Supabase dashboard. From 008 onward
 they are version-controlled SQL files under `supabase/migrations/`, named by
@@ -665,6 +665,7 @@ timestamp so they apply in order.
 | 019 | `20260801121100_amount_paid_derived.sql` | `sales.amount_paid` becomes a trigger-maintained sum |
 | 020 | `20260801121200_record_payment.sql` | `record_payment()`; `record_sale()` writes through the ledger |
 | 021 | `20260801121300_batch_reference_not_unique.sql` | Batch reference is free-form, duplicates allowed |
+| 022 | `20260801121400_record_sale_explicit_batch.sql` | A sale line may name its batch; FIFO becomes the fallback |
 
 Each file carries its own reasoning in a header comment. The entries below cover
 the ones that changed security or business rules rather than schema shape.
@@ -860,6 +861,71 @@ distinguishable.
 
 ---
 
+# Migration 022 — A Sale Line May Name Its Batch
+
+## Purpose
+
+`record_sale()` chose the batches itself, oldest first. That is the right
+default, but a shop sometimes needs to sell from a specific arrival: the older
+stock is at the back of the shelf, the customer is matching a part they bought
+before, or the newer batch is the one physically in reach. There was no way to
+say so.
+
+## Changes Implemented
+
+Each entry in `p_items` may now carry an optional `stock_batch_id`.
+
+- **Present** — that batch is deducted, and only that batch. If it is short the
+  whole sale is refused rather than spilling into another batch. The other batch
+  has a different capital price, so quietly taking units from it would book a
+  profit other than the one the user was shown. The till adds the product again
+  on another batch for the rest, which is one more `sale_items` row.
+- **Absent** — the FIFO loop, unchanged. Old clients and any line where the
+  user did not care behave exactly as before.
+
+FIFO is therefore not replaced. It is the fallback, and it is what the UI
+pre-selects.
+
+The batch is validated in the same statement that locks it, on `id`, `shop_id`
+*and* `product_id`. Without `shop_id` a caller could name another shop's batch;
+without `product_id` they could deduct a batch unrelated to the product on the
+line, and the `sale_items` row would then disagree with itself.
+
+## Why the Signature Is Unchanged
+
+The new field rides inside the existing `jsonb` argument, so this is a
+`CREATE OR REPLACE`: no `DROP FUNCTION`, no re-issued grants, and no window
+where two overloads could both match a call.
+
+## Locking
+
+The old version locked each product's batches in `(received_date, created_at)`
+order as it reached them. With explicit batches the order a sale touches rows in
+is the order the user happened to build the cart, so two tills selling the same
+two batches in opposite orders could deadlock and Postgres would abort one.
+
+Every row the sale could possibly touch is now locked once, up front, `ORDER BY
+id`. Every concurrent sale takes its locks in the same order, so the cycle
+cannot form. Explicitly named batches are included even when empty, so a line
+naming a sold-out batch fails its own quantity check rather than racing another
+sale for it.
+
+## Why It Is Safe
+
+No schema change. `sale_items.stock_batch_id` already recorded the exact batch
+and profit was already computed per batch, so reports, the credit and payment
+path, and every existing row are untouched. The migration writes no data — it
+redefines one function.
+
+## Deployment Order
+
+This migration must be applied **before** the application is deployed. A new
+client sending `stock_batch_id` to the old function would have the key silently
+ignored, and stock would be deducted FIFO — a different batch and a different
+profit than the user was shown, with no error.
+
+---
+
 # RLS Permission Structure
 
 Note: this section describes the structure as of Migration 012, which narrowed
@@ -931,7 +997,7 @@ StockFlow Database v1.1
 Status:
 
 ```
-COMPLETED — migrations 001-021 applied
+COMPLETED — migrations 001-022 applied
 ```
 
 Supports:
@@ -940,6 +1006,7 @@ Supports:
 - Batch-based inventory with FIFO deduction
 - Free-form, non-unique batch references for stock arrivals
 - Atomic sale recording with server-side profit calculation
+- Manual batch selection at the till, with FIFO as the default and fallback
 - Discounts below capital price, and partial or credit payments
 - Per-instalment payment ledger with derived `sales.amount_paid`
 - Customers, so credit is tracked per person
