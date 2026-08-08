@@ -287,6 +287,39 @@ The system must allow users to:
 
 ---
 
+## Voiding a Recorded Sale
+
+Sales get rung up wrongly: the wrong item, the wrong customer, an order the
+customer cancelled a minute later. The system must let the shop cancel such a
+sale without deleting it.
+
+Requirements:
+
+- Recorded sales are never permanently deleted.
+- Only the shop owner may void a sale. An assistant may record sales and collect
+  payments but may not undo a recorded transaction.
+- A void requires a written reason, and the reason is kept with the sale.
+- The void is confirmed in a dialog that shows which sale is about to be
+  cancelled, so the wrong one cannot be voided by a stray click.
+- The stock is returned to the exact batches it was deducted from, so capital
+  prices and FIFO order stay correct. Each batch credited also appears in the
+  stock adjustment history (section 13).
+- If a batch cannot take its stock back — it was already corrected by hand — the
+  void is refused and the batch is named, rather than restoring part of the sale.
+- The sale remains visible in the sales list and on its own page, clearly marked
+  as voided, with the reason, the time, and who voided it.
+- Payments already collected against the sale are kept for history but stop
+  counting as money collected. No further payment can be collected against a
+  voided sale.
+- Every report excludes voided sales: daily and monthly totals, profit,
+  collections, top products, and customer credit balances.
+
+Editing a recorded sale is not part of this: a correction is a void followed by
+recording the sale again, which keeps both the original and the replacement in
+the history.
+
+---
+
 # 9. FIFO Inventory Deduction
 
 The system follows First In First Out (FIFO) by default.
@@ -423,6 +456,7 @@ Examples:
 - Damaged items
 - Missing items
 - Incorrect inventory count
+- Stock returned to a batch because its sale was voided (section 8)
 
 Each adjustment must store:
 
@@ -447,6 +481,7 @@ YES:
 - Batch inventory
 - FIFO deduction, with manual batch selection
 - Sales recording
+- Sale voiding, with stock restored to the original batches
 - Profit calculation
 - Basic reports
 

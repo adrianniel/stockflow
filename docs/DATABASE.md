@@ -497,7 +497,13 @@ A single sale can contain multiple products and multiple stock batches.
 | total_profit   | decimal   | Total earned profit    |
 | payment_status | text      | Paid, partial, credit  |
 | sale_date      | timestamp | Transaction date       |
+| voided_at      | timestamp | Set when cancelled     |
+| voided_by      | uuid      | Owner who cancelled it |
+| void_reason    | text      | Why it was cancelled   |
 | created_at     | timestamp | Creation date          |
+
+A live sale has `voided_at IS NULL`. That predicate is what every report filters
+on, so it is the single fact that decides whether a sale counts.
 
 ---
 
@@ -663,6 +669,35 @@ Sales must support:
 - Quantity input
 - Actual selling price input
 - Discount handling
+
+---
+
+## Voiding a Sale
+
+A recorded sale is never deleted. It is voided, which means the row stays and
+stops counting.
+
+Rules:
+
+- Only an OWNER may void, and only a sale in their own shop.
+- A reason is required. `sales_void_reason_required` enforces it in the database,
+  not just in the form.
+- The stock goes back to the exact batches it was deducted from, and each batch
+  credited gets a `stock_adjustments` row so the movement is in the inventory
+  history like any other correction.
+- If a batch cannot take its units back without exceeding `quantity_received`,
+  the whole void is refused. That batch has already been corrected another way,
+  and restoring the rest would leave inventory silently wrong.
+- Payments already collected are marked `sale_payments.voided_at` rather than
+  deleted. The amount, date, collector and note stay readable on the sale;
+  `amount_paid` and `payment_status` are recomputed from live payments only.
+- No further payment can be collected against a voided sale.
+- Every report — daily totals, profit, collections, top products, customer
+  balances — excludes voided sales. The sales list and the sale detail page still
+  show them, labelled as voided.
+
+All of this happens inside `void_sale()`, in one transaction. See Migration 023
+in `database-migrations.md`.
 
 ---
 

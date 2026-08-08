@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { StatCard } from "@/components/dashboard/stat-card";
@@ -50,23 +51,42 @@ export default async function SalesPage() {
             {sale.item_count} line(s)
             {sale.seller_name ? ` · ${sale.seller_name}` : ""}
           </p>
+          {/* Repeated here rather than left to the Status column, which is
+              hidden on mobile — on a phone this is the only place the void
+              would be visible, and a voided sale that reads as an ordinary one
+              is worse than not listing it at all. */}
+          {sale.voided_at ? (
+            <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-rose-600">
+              Voided
+            </p>
+          ) : null}
         </div>
       ),
     },
     {
       header: "Status",
       hideOnMobile: true,
-      cell: (sale) => <PaymentBadge sale={sale} />,
+      cell: (sale) =>
+        sale.voided_at ? (
+          <Badge tone="danger">Voided</Badge>
+        ) : (
+          <PaymentBadge sale={sale} />
+        ),
     },
     {
       header: "Total",
       align: "right",
-      cell: (sale) => formatCurrency(sale.total_amount),
+      cell: (sale) => <Cancellable sale={sale}>{formatCurrency(sale.total_amount)}</Cancellable>,
     },
     {
       header: "Profit",
       align: "right",
-      cell: (sale) => <Profit value={sale.total_profit} />,
+      cell: (sale) =>
+        sale.voided_at ? (
+          <Cancellable sale={sale}>{formatCurrency(sale.total_profit)}</Cancellable>
+        ) : (
+          <Profit value={sale.total_profit} />
+        ),
     },
   ];
 
@@ -104,7 +124,7 @@ export default async function SalesPage() {
       <Panel>
         <PanelHeader
           title="Recent sales"
-          description="The 50 most recent transactions. Open one to see the batches it drew from."
+          description="The 50 most recent transactions, voided ones included. Open one to see the batches it drew from."
           actions={<ButtonLink href="/dashboard/sales/new">New sale</ButtonLink>}
         />
 
@@ -136,6 +156,27 @@ function PaymentBadge({ sale }: { sale: SaleWithSeller }) {
       </span>
     </div>
   );
+}
+
+/**
+ * A money figure that a void has cancelled.
+ *
+ * Struck through rather than blanked: the amount is still what was recorded,
+ * and someone reconciling a day needs to see the number that used to be there
+ * as well as the fact that it no longer counts.
+ */
+function Cancellable({
+  sale,
+  children,
+}: {
+  sale: SaleWithSeller;
+  children: ReactNode;
+}) {
+  if (!sale.voided_at) {
+    return <>{children}</>;
+  }
+
+  return <span className="text-slate-400 line-through">{children}</span>;
 }
 
 /**

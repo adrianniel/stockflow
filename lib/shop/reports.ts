@@ -198,7 +198,10 @@ async function loadSales(
     )
     .eq("shop_id", shopId)
     .gte("sale_date", from.toISOString())
-    .lt("sale_date", to.toISOString());
+    .lt("sale_date", to.toISOString())
+    // A voided sale is not a sale. It contributes no revenue, no cost and no
+    // profit, and the units it moved have gone back to their batches.
+    .is("voided_at", null);
 
   if (filter !== "all") {
     query = query.eq("payment_status", filter);
@@ -267,6 +270,9 @@ async function loadPayments(
     .eq("shop_id", shopId)
     .gte("collected_at", from.toISOString())
     .lt("collected_at", to.toISOString())
+    // Payments of a voided sale are kept on the sale for history but are not
+    // cash the shop is holding, so they leave the collection figure with it.
+    .is("voided_at", null)
     .limit(ROW_CEILING);
 
   if (error) {
@@ -581,7 +587,7 @@ export async function getDayDetail(
         amount_paid,
         payment_status,
         sale_date,
-        users ( name ),
+        users!sales_sold_by_fkey ( name ),
         customers ( name ),
         sale_items ( quantity )
       `,
@@ -589,6 +595,7 @@ export async function getDayDetail(
       .eq("shop_id", shopId)
       .gte("sale_date", from.toISOString())
       .lt("sale_date", to.toISOString())
+      .is("voided_at", null)
       .order("sale_date", { ascending: false })
       .limit(ROW_CEILING),
     supabase
@@ -607,6 +614,7 @@ export async function getDayDetail(
       .eq("shop_id", shopId)
       .gte("collected_at", from.toISOString())
       .lt("collected_at", to.toISOString())
+      .is("voided_at", null)
       .order("collected_at", { ascending: false })
       .limit(ROW_CEILING),
   ]);
@@ -717,7 +725,7 @@ async function getTopProducts(
       quantity,
       actual_selling_price,
       profit,
-      sales!inner ( shop_id, sale_date ),
+      sales!inner ( shop_id, sale_date, voided_at ),
       stock_batches (
         products ( product_name )
       )
@@ -726,6 +734,9 @@ async function getTopProducts(
     .eq("sales.shop_id", shopId)
     .gte("sales.sale_date", from.toISOString())
     .lt("sales.sale_date", to.toISOString())
+    // Filtered through the join rather than on sale_items, which has no void
+    // of its own — the line is cancelled because its sale is.
+    .is("sales.voided_at", null)
     .limit(ROW_CEILING);
 
   if (error) {

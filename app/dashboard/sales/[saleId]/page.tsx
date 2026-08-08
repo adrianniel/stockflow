@@ -9,14 +9,16 @@ import { Panel, PanelHeader } from "@/components/ui/panel";
 import { requireRole } from "@/lib/auth/guards";
 import { getDashboardIdentity } from "@/lib/dashboard/identity";
 import { shopContextFor } from "@/lib/shop/context";
-import { getSale, listSaleItems } from "@/lib/shop/queries";
-import type { SaleItem } from "@/lib/shop/types";
+import { getSale, listSaleItems, listSalePayments } from "@/lib/shop/queries";
+import type { SaleItem, SalePayment } from "@/lib/shop/types";
 import {
   formatCurrency,
   formatDateKey,
   formatDateTime,
   toNumber,
 } from "@/lib/utils/format";
+
+import { VoidSaleDialog } from "./void-sale-dialog";
 
 /**
  * One sale, line by line.
@@ -44,9 +46,52 @@ export default async function SaleDetailPage({
     notFound();
   }
 
-  const items = await listSaleItems(context, sale.id);
+  const [items, payments] = await Promise.all([
+    listSaleItems(context, sale.id),
+    listSalePayments(context, sale.id),
+  ]);
 
+  const voided = sale.voided_at !== null;
   const outstanding = toNumber(sale.total_amount) - toNumber(sale.amount_paid);
+
+  // Only owners may void, and only a live sale can be voided. The action and
+  // void_sale() both enforce the role independently — this just decides whether
+  // the button is worth showing.
+  const canVoid = profile.role === "OWNER" && !voided;
+
+  const paymentColumns: Array<Column<SalePayment>> = [
+    {
+      header: "Collected",
+      cell: (payment) => (
+        <div>
+          <p className="font-medium text-slate-950">
+            {formatDateTime(payment.collected_at)}
+          </p>
+          <p className="text-xs text-slate-500">
+            {payment.collected_by_name ?? "Unknown staff"}
+            {payment.note ? ` · ${payment.note}` : ""}
+          </p>
+        </div>
+      ),
+    },
+    {
+      header: "Amount",
+      align: "right",
+      cell: (payment) =>
+        payment.voided_at ? (
+          <div>
+            <p className="font-medium text-slate-400 line-through">
+              {formatCurrency(payment.amount)}
+            </p>
+            <p className="text-xs text-rose-600">Voided</p>
+          </div>
+        ) : (
+          <span className="font-medium text-emerald-700">
+            {formatCurrency(payment.amount)}
+          </span>
+        ),
+    },
+  ];
 
   const columns: Array<Column<SaleItem>> = [
     {
@@ -138,24 +183,55 @@ export default async function SaleDetailPage({
         shopName={profile.shop_name}
       />
 
+      {voided ? (
+        <div
+          role="status"
+          className="rounded-3xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-800"
+        >
+          <p className="font-semibold uppercase tracking-[0.18em] text-rose-700">
+            Voided sale
+          </p>
+          <p className="mt-2">{sale.void_reason}</p>
+          <p className="mt-1 text-xs text-rose-700/80">
+            Voided {formatDateTime(sale.voided_at)}
+            {sale.voided_by_name ? ` by ${sale.voided_by_name}` : ""}. The stock
+            has been returned to its batches and none of the figures below count
+            towards any report.
+          </p>
+        </div>
+      ) : null}
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard
           label="Total"
           value={formatCurrency(sale.total_amount)}
-          delta={`${items.length} line(s)`}
+          delta={
+            voided ? "Not counted — voided" : `${items.length} line(s)`
+          }
         />
         <StatCard
           label="Profit"
           value={formatCurrency(sale.total_profit)}
           delta={
-            toNumber(sale.total_profit) < 0 ? "Sold at a loss" : "Actual profit"
+            voided
+              ? "Not counted — voided"
+              : toNumber(sale.total_profit) < 0
+                ? "Sold at a loss"
+                : "Actual profit"
           }
         />
         <StatCard
           label="Collected"
-          value={formatCurrency(sale.amount_paid)}
+          value={formatCurrency(voided ? 0 : sale.amount_paid)}
           delta={
-            outstanding > 0 ? `${formatCurrency(outstanding)} due` : "Fully paid"
+            // A voided sale owes nothing, so the outstanding figure would be
+            // wrong here — its payments were voided with it, which is what
+            // leaves amount_paid at zero.
+            voided
+              ? "Nothing owed — voided"
+              : outstanding > 0
+                ? `${formatCurrency(outstanding)} due`
+                : "Fully paid"
           }
         />
       </div>
@@ -166,7 +242,19 @@ export default async function SaleDetailPage({
           description="One row per stock batch used. A quantity that spanned two batches is split across two rows."
           actions={
             <>
-              <Badge>{sale.payment_status}</Badge>
+              {voided ? (
+                <Badge tone="danger">Voided</Badge>
+              ) : (
+                <Badge>{sale.payment_status}</Badge>
+              )}
+              {canVoid ? (
+                <VoidSaleDialog
+                  saleId={sale.id}
+                  summary={`${formatCurrency(sale.total_amount)} recorded ${formatDateTime(
+                    sale.sale_date,
+                  )}`}
+                />
+              ) : null}
               <ButtonLink href="/dashboard/sales" variant="secondary">
                 Back to sales
               </ButtonLink>
@@ -182,6 +270,27 @@ export default async function SaleDetailPage({
           emptyDescription="This sale has no recorded items."
         />
       </Panel>
+
+      {payments.length > 0 ? (
+        <Panel>
+          <PanelHeader
+            title="Payments"
+            description={
+              voided
+                ? "Kept for history. These collections were voided with the sale and no longer count towards any day's takings."
+                : "Every instalment collected against this sale, in the order the money arrived."
+            }
+          />
+
+          <DataTable
+            rows={payments}
+            columns={paymentColumns}
+            rowKey={(payment) => payment.id}
+            emptyTitle="No payments"
+            emptyDescription="Nothing has been collected against this sale."
+          />
+        </Panel>
+      ) : null}
     </>
   );
 }

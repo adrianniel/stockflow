@@ -85,11 +85,24 @@ export type Sale = {
   sale_date: string | null;
   sold_by: string | null;
   customer_id: string | null;
+  /**
+   * Set once the sale has been cancelled. A voided sale keeps its row, its
+   * line items and its payment history, but counts for nothing: it is out of
+   * every report, out of every balance owed, and its stock has gone back to
+   * the batches it came from.
+   *
+   * `payment_status` on a voided sale is meaningless — the recompute trigger
+   * drops it to CREDIT once the payments are marked voided — so show the void
+   * instead of the status.
+   */
+  voided_at: string | null;
+  void_reason: string | null;
 };
 
 export type SaleWithSeller = Sale & {
   seller_name: string | null;
   customer_name: string | null;
+  voided_by_name: string | null;
   item_count: number;
 };
 
@@ -155,6 +168,12 @@ export type SalePayment = {
   collected_at: string;
   note: string | null;
   collected_by_name: string | null;
+  /**
+   * Set when the parent sale was voided. The money is no longer counted
+   * anywhere, but the row stays so the sale can still show what was collected
+   * and when, which is the point of voiding rather than deleting.
+   */
+  voided_at: string | null;
 };
 
 /**

@@ -725,6 +725,10 @@ export async function deleteCustomer(
       .eq("shop_id", shopId)
       .eq("customer_id", id)
       .neq("payment_status", "PAID")
+      // A voided sale reads as CREDIT with nothing paid. Counting it here would
+      // block the customer from ever being removed over a debt that was
+      // cancelled.
+      .is("voided_at", null)
       .limit(1);
 
     if (unpaidError) {
@@ -829,6 +833,121 @@ export async function recordPayment(
 
     return success("Payment recorded.");
   });
+}
+
+type VoidResult = {
+  restored_units: number;
+  restored_batches: number;
+  orphan_lines: number;
+  voided_payments: number;
+};
+
+/**
+ * Cancels a recorded sale without deleting it.
+ *
+ * Everything of consequence happens in `void_sale()`: the sale row is locked,
+ * its batches are locked in id order, the stock goes back with a
+ * `stock_adjustments` row per batch to say why, and the payments are marked
+ * voided so the recompute trigger takes them out of `amount_paid`. Splitting
+ * that across PostgREST calls would leave a window where stock had been
+ * returned but the sale still counted, or the reverse.
+ *
+ * Owner-only, unlike recording a sale or taking a payment. An assistant at the
+ * counter should be able to record what happens; undoing a recorded transaction
+ * is the owner's call. `void_sale()` enforces the same rule itself, so this
+ * check is only here to produce a readable message.
+ */
+export async function voidSale(
+  _previous: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  return withShop(async () => {
+    const { supabase } = await getShopContext("OWNER");
+    const errors = new FormErrors();
+
+    const saleId = readString(form, "sale_id");
+    const reason = requiredText(form, "void_reason", errors, {
+      label: "Reason",
+      max: 300,
+    });
+
+    if (!isUuid(saleId)) {
+      return failure("That sale could not be found.");
+    }
+
+    if (errors.hasErrors) {
+      return failure("Check the highlighted fields.", errors.all);
+    }
+
+    const { data, error } = await supabase.rpc("void_sale", {
+      p_sale_id: saleId,
+      p_reason: reason,
+    });
+
+    if (error) {
+      // "Returning 5 unit(s) to batch 080826 would leave it holding..." and
+      // "This sale was already voided" are RAISE EXCEPTION text written for the
+      // user, so they pass through unchanged.
+      return databaseFailure(error, "Could not void this sale.");
+    }
+
+    revalidatePath("/dashboard/sales");
+    revalidatePath(`/dashboard/sales/${saleId}`);
+    revalidatePath("/dashboard/inventory");
+    revalidatePath("/dashboard/adjustments");
+    revalidatePath("/dashboard/credit");
+    revalidatePath("/dashboard/reports");
+    // The sale's own day and every day it was collected on can all change, so
+    // the whole segment is dropped rather than guessed at. See recordSale.
+    revalidatePath("/dashboard/reports/[date]", "page");
+    revalidatePath("/dashboard/owner");
+    revalidatePath("/dashboard/assistant");
+
+    return success(voidMessage(data as VoidResult | null));
+  });
+}
+
+/**
+ * Says what the void actually did, rather than only that it worked.
+ *
+ * The units restored are the number worth reading back — it is the figure the
+ * owner can check against the shelf. Lines whose batch no longer exists are
+ * called out separately, because that stock cannot come back and the shop needs
+ * to know it has to correct those by hand.
+ */
+function voidMessage(result: VoidResult | null): string {
+  if (result === null) {
+    return "Sale voided.";
+  }
+
+  const parts = ["Sale voided."];
+
+  if (result.restored_units > 0) {
+    const units = result.restored_units === 1 ? "unit" : "units";
+    const batches = result.restored_batches === 1 ? "batch" : "batches";
+
+    parts.push(
+      `${result.restored_units} ${units} returned to ${result.restored_batches} ${batches}.`,
+    );
+  }
+
+  if (result.orphan_lines > 0) {
+    const lines = result.orphan_lines === 1 ? "line" : "lines";
+
+    parts.push(
+      `${result.orphan_lines} ${lines} could not be restored because the batch no longer exists — adjust that stock manually.`,
+    );
+  }
+
+  if (result.voided_payments > 0) {
+    const payments = result.voided_payments === 1 ? "payment" : "payments";
+
+    parts.push(
+      `${result.voided_payments} ${payments} kept on the sale for history but no longer counted.`,
+    );
+  }
+
+  return parts.join(" ");
 }
 
 // ---------------------------------------------------------------------------

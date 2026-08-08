@@ -105,7 +105,13 @@ required_columns(table_name, column_name, migration, consequence) AS (
         ('sale_payments',    'amount',               '20260801121000', 'Recording any paid sale fails; collections cannot be logged'),
         ('sale_payments',    'collected_at',         '20260801121000', 'Payment dates are lost; a Day 2 collection cannot be dated'),
         ('sale_payments',    'collected_by',         '20260801121000', 'Who took the payment is unrecorded'),
-        ('sale_payments',    'note',                 '20260801121000', 'Sale detail page errors')
+        ('sale_payments',    'note',                 '20260801121000', 'Sale detail page errors'),
+
+        -- 20260801121500 — voiding a sale
+        ('sales',            'voided_at',            '20260801121500', 'Sales list, sale detail and every report error 42703'),
+        ('sales',            'voided_by',            '20260801121500', 'Sales list and sale detail error 42703'),
+        ('sales',            'void_reason',          '20260801121500', 'Sales list and sale detail error 42703'),
+        ('sale_payments',    'voided_at',            '20260801121500', 'Sale detail errors; a voided sale''s collections keep counting as money taken')
 ),
 
 checks AS (
@@ -164,13 +170,13 @@ checks AS (
         'apply 20260801120200 — partial payments can exceed the total'
 
     UNION ALL SELECT
-        'constraint: payment_status matches amount_paid (20260801120200)',
-        EXISTS (
+        'constraint: payment_status NOT constrained to amount_paid (20260801121100)',
+        NOT EXISTS (
             SELECT 1 FROM pg_constraint
             WHERE conrelid = 'public.sales'::regclass
               AND conname = 'sales_payment_status_amount_check'
         ),
-        'apply 20260801120200 — PAID/CREDIT/PARTIAL can drift out of sync with amount_paid'
+        'apply 20260801121100 — this FAIL means the OLD constraint is still present and the ledger migration has not fully applied (the recompute trigger check above will also FAIL)'
 
     UNION ALL SELECT
         'constraint: sale_items.profit may be negative (20260801120200)',
@@ -305,6 +311,63 @@ checks AS (
               AND p.prosrc LIKE '%->>''stock_batch_id''%'
         ),
         'apply 20260801121400 BEFORE deploying the app — the till''s batch choice is silently ignored and FIFO stock is deducted at the wrong capital price, with no error'
+
+    -- Migration 023 -----------------------------------------------------------
+    UNION ALL SELECT
+        'function: void_sale exists (20260801121500)',
+        EXISTS (
+            SELECT 1 FROM pg_proc p
+            JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = 'public' AND p.proname = 'void_sale'
+        ),
+        'apply 20260801121500 — voiding a sale fails with PGRST202 (function not found)'
+
+    -- The app spells its seller embed `users!sales_sold_by_fkey`, because
+    -- sales now has two foreign keys to users and a bare `users ( name )` is
+    -- ambiguous. If this constraint were ever recreated under a generated name,
+    -- every sales select would fail at runtime with PGRST201 — invisible to
+    -- typecheck, lint and build.
+    UNION ALL SELECT
+        'constraint: sales_sold_by_fkey named as the app''s embeds expect',
+        EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conrelid = 'public.sales'::regclass
+              AND conname = 'sales_sold_by_fkey'
+              AND contype = 'f'
+        ),
+        'the seller name embed in lib/shop/queries.ts and lib/shop/reports.ts fails with PGRST201; rename the constraint back to sales_sold_by_fkey'
+
+    UNION ALL SELECT
+        'constraint: a void must carry a reason (20260801121500)',
+        EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conrelid = 'public.sales'::regclass
+              AND conname = 'sales_void_reason_required'
+        ),
+        'apply 20260801121500 — a sale could be voided with no explanation of why'
+
+    -- Two CREATE OR REPLACE bodies with unchanged signatures. Nothing about
+    -- their shape differs before and after, so — as with record_sale in 022 —
+    -- the body itself is the only evidence the migration ran.
+    UNION ALL SELECT
+        'function: payment ledger skips voided payments (20260801121500)',
+        EXISTS (
+            SELECT 1 FROM pg_proc p
+            JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = 'public' AND p.proname = 'recompute_sale_payment_state'
+              AND p.prosrc LIKE '%voided_at IS NULL%'
+        ),
+        'apply 20260801121500 — a voided sale keeps its amount_paid, so its collections still count as money taken and customer balances are wrong'
+
+    UNION ALL SELECT
+        'function: record_payment refuses a voided sale (20260801121500)',
+        EXISTS (
+            SELECT 1 FROM pg_proc p
+            JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = 'public' AND p.proname = 'record_payment'
+              AND p.prosrc LIKE '%v_voided_at IS NOT NULL%'
+        ),
+        'apply 20260801121500 — a voided credit sale still looks collectable (amount_paid 0, status CREDIT) and money can be taken against it'
 
     -- RLS is the whole security model; a table with it switched off is a leak
     -- between shops, not a missing feature.

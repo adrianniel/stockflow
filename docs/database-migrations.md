@@ -926,6 +926,197 @@ profit than the user was shown, with no error.
 
 ---
 
+# Migration 023 — Voiding a Recorded Sale
+
+File: `20260801121500_void_sales.sql`
+
+## Purpose
+
+A sale rung up wrongly had no way out. The row was permanent, its stock stayed
+deducted, and the only remedy was a manual stock adjustment that left the wrong
+sale counting in every report forever.
+
+## Why Not DELETE
+
+`sale_items` and `sale_payments` both cascade from `sales`. Deleting a sale
+would take the line items, the batch links, the profit figures and the payment
+history with it — leaving nothing to reconcile against when the day's cash does
+not match the day's report, and nothing to say which batches to credit the
+stock back to.
+
+So a void is a mark, not a removal. The sale stays visible, labelled, and
+excluded from every total.
+
+## Schema Changes
+
+On `sales`:
+
+| Column        | Type          | Notes                                     |
+| ------------- | ------------- | ----------------------------------------- |
+| `voided_at`   | `timestamptz` | NULL for a live sale                      |
+| `voided_by`   | `uuid`        | FK to `users`, `ON DELETE SET NULL`       |
+| `void_reason` | `text`        | Required whenever `voided_at` is set      |
+
+On `sale_payments`:
+
+| Column      | Type          | Notes                                       |
+| ----------- | ------------- | ------------------------------------------- |
+| `voided_at` | `timestamptz` | Set when the parent sale is voided          |
+
+Constraint `sales_void_reason_required` keeps the three columns coherent: either
+the sale is live and there is no reason, or it is voided and the reason is
+non-blank. `voided_by` is deliberately outside that predicate — it is
+`ON DELETE SET NULL`, so removing the staff account that voided a sale must not
+retroactively invalidate the row.
+
+Two partial indexes, `idx_sales_shop_live` and
+`idx_sale_payments_shop_collected_live`, both `WHERE voided_at IS NULL`. Every
+reporting query now carries that predicate and voided rows are a rounding error
+in the row count, so indexing only the live rows keeps them smaller than the
+full-table equivalents.
+
+## Why the FK Constraint Is Named Explicitly
+
+`sales` now has two foreign keys to `users` — `sold_by` and `voided_by`. That
+makes the PostgREST embed `users ( name )` ambiguous, and PostgREST answers such
+a request with PGRST201 rather than picking one. Every select that embeds the
+seller must now name the relationship: `users!sales_sold_by_fkey ( name )` and
+`voided_by_user:users!sales_voided_by_fkey ( name )`.
+
+Those constraint names are therefore part of the application's contract, which
+is why the migration names them rather than letting Postgres generate them.
+
+## Payments: Marked, Not Deleted
+
+Three options were on the table.
+
+1. **Delete the `sale_payments` rows.** Simplest, and the existing recompute
+   trigger drops `amount_paid` to 0 on its own. But it destroys the record that
+   money was ever taken — exactly the audit history a void is meant to preserve
+   — and leaves no way to answer "the drawer was 500 over on Tuesday, why?"
+
+2. **Insert a negative reversal row.** True double-entry history: the collection
+   stays on the day it happened and the refund lands on the day it was returned.
+   But `sale_payments_amount_check` requires `amount > 0`, so this means
+   relaxing that constraint for every code path, not just this one — after which
+   any owner or assistant can insert a stray negative payment straight through
+   PostgREST. It also puts negative rows into the daily collections list, which
+   then needs handling everywhere collections are displayed.
+
+3. **Mark the payment voided and exclude it.** Chosen. The row survives intact —
+   amount, date, who collected it, note — so the history is fully readable on
+   the sale. `amount > 0` stays in force. No new sign conventions leak into
+   reports.
+
+The cost of (3) is that a collection taken on an earlier day drops out of that
+earlier day's figures when the sale is voided later. That is a real trade, and
+it is the reason (2) exists. It is acceptable here because the dominant case is
+a cash sale rung up wrong: `record_sale()` writes the payment with the same
+timestamp as the sale, so voiding it the same day moves no historical number at
+all. The cross-day case is a part-collected credit sale that later turns out to
+be a mistake — rare, and explained by the void reason on the sale. If the shop
+starts doing genuine refunds, money handed back over the counter on a later day,
+that is when (2) becomes the right model, and it is an additive change from
+here.
+
+## Functions
+
+**`void_sale(p_sale_id uuid, p_reason text) → jsonb`** — new.
+`SECURITY DEFINER`, `SET search_path = ''`, for the same reason as
+`record_sale()`: it writes to `sales`, `stock_batches`, `sale_payments` and
+`stock_adjustments` in one transaction, and PostgREST cannot express a
+transaction.
+
+Authorization is done inside and is load-bearing: the caller is resolved from
+`auth.uid()` and never passed in, the caller must be `OWNER`, the sale must
+belong to the caller's own shop (checked in the statement that locks it, so
+another shop's id reads as not found), and there is no `shop_id` argument to
+spoof. An assistant may take money but may not undo a recorded transaction,
+which matches the `sale_payments` UPDATE/DELETE policies already in place.
+
+What it does, in order:
+
+1. Locks the sale row; refuses a sale that is already voided.
+2. Locks every batch the sale touched, once, `ORDER BY id`.
+3. Refuses the whole void if any batch would end up holding more than
+   `quantity_received` — see below.
+4. Adds the units back to each batch and writes one `stock_adjustments` row per
+   batch, reason `Sale voided: <reason>`.
+5. Marks the sale's live payments voided.
+6. Stamps `voided_at`, `voided_by`, `void_reason` on the sale.
+7. Returns `{restored_units, restored_batches, orphan_lines, voided_payments}`.
+
+Being a new function it needs its grants issued — `CREATE FUNCTION` starts with
+EXECUTE granted to PUBLIC — so the migration ends with `REVOKE ALL … FROM
+PUBLIC` and `GRANT EXECUTE … TO authenticated`.
+
+**`recompute_sale_payment_state()`** — replaced. One clause added to each of the
+three payment sums: `AND p.voided_at IS NULL`. That is what makes marking a
+payment voided equivalent to removing it as far as `amount_paid` and
+`payment_status` are concerned, while the row itself stays readable.
+
+**`record_payment(uuid, numeric, timestamptz, text)`** — replaced. Now reads
+`voided_at` under the same row lock and refuses a voided sale. Without this a
+voided credit sale still looks collectable: voiding its payments leaves
+`amount_paid` at 0 and `payment_status` at `CREDIT`, which is exactly the state
+an uncollected debt is in.
+
+Both replacements keep their signature, so grants and the trigger binding stand.
+Both are also invisible to any structural check — the only way to tell whether
+they ran is to read `pg_proc.prosrc`, which `docs/verify-setup.sql` does.
+
+## Why an Over-Capacity Restore Is Refused
+
+`quantity_received` is fixed at arrival and
+`stock_batches_remaining_within_received` enforces the ceiling. A batch that
+cannot take its units back has already had them put back another way — most
+likely a manual adjustment made to paper over this very sale. Restoring the rest
+and silently dropping that batch would leave inventory wrong with nothing on
+screen to say so, so the function stops, names the batch, and leaves the owner
+in control.
+
+Lines whose batch was deleted afterwards are a different case:
+`sale_items.stock_batch_id` is `ON DELETE SET NULL`, so there is no batch left
+to credit. Those are counted as `orphan_lines` and reported back, because the
+difference between "stock came back" and "stock could not come back" is the
+shop's to know.
+
+## Locking
+
+Sale row first, then batches by id ascending. That is the same order
+`record_sale()` takes — it holds the row lock on the sale it just inserted
+before it touches any batch — so the two cannot deadlock against each other, and
+two voids sharing a batch serialize on that batch.
+
+## Read Paths That Changed
+
+Reports and balances exclude voided rows; history does not.
+
+Excluded: `loadSales`, `loadPayments`, both `getDayDetail` queries,
+`getTopProducts` (through `sales!inner`), `listCustomersWithBalances`,
+`listCustomerUnpaidSales`, and the outstanding-balance check in
+`deleteCustomer`.
+
+Not excluded, on purpose: `listSales` and `getSale`. A voided sale that
+disappeared from the list would be indistinguishable from one that was deleted,
+which is the outcome this migration exists to avoid.
+
+## Why It Is Safe
+
+Additive. Three nullable columns, one nullable column, two partial indexes, one
+new function, two function bodies. No existing row is rewritten — every sale
+recorded before this migration has `voided_at IS NULL` and behaves exactly as it
+did.
+
+## Deployment Order
+
+Apply **before** deploying the application. The app's selects name
+`sales_sold_by_fkey` explicitly; against the old schema, where that constraint
+exists but `voided_at` does not, the selects fail on the missing columns and the
+sales pages error.
+
+---
+
 # RLS Permission Structure
 
 Note: this section describes the structure as of Migration 012, which narrowed
@@ -997,7 +1188,7 @@ StockFlow Database v1.1
 Status:
 
 ```
-COMPLETED — migrations 001-022 applied
+COMPLETED — migrations 001-023 applied
 ```
 
 Supports:
@@ -1012,6 +1203,8 @@ Supports:
 - Customers, so credit is tracked per person
 - Account provisioning for owners and assistants
 - Account and shop suspension
+- Voiding a recorded sale, with the stock returned to its original batches and
+  the sale kept in the history
 
 ---
 

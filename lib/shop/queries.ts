@@ -347,7 +347,10 @@ type SaleRow = {
   sale_date: string | null;
   sold_by: string | null;
   customer_id: string | null;
+  voided_at: string | null;
+  void_reason: string | null;
   users: Embedded<{ name: string | null }>;
+  voided_by_user: Embedded<{ name: string | null }>;
   customers: Embedded<{ name: string }>;
   sale_items: Array<{ id: string }> | null;
 };
@@ -361,7 +364,10 @@ const SALE_SELECT = `
   sale_date,
   sold_by,
   customer_id,
-  users ( name ),
+  voided_at,
+  void_reason,
+  users!sales_sold_by_fkey ( name ),
+  voided_by_user:users!sales_voided_by_fkey ( name ),
   customers ( name ),
   sale_items ( id )
 `;
@@ -376,12 +382,25 @@ function toSaleWithSeller(row: SaleRow): SaleWithSeller {
     sale_date: row.sale_date,
     sold_by: row.sold_by,
     customer_id: row.customer_id,
+    voided_at: row.voided_at,
+    void_reason: row.void_reason,
     seller_name: one(row.users)?.name ?? null,
     customer_name: one(row.customers)?.name ?? null,
+    voided_by_name: one(row.voided_by_user)?.name ?? null,
     item_count: row.sale_items?.length ?? 0,
   };
 }
 
+/**
+ * The most recent transactions, voided ones included.
+ *
+ * Voided sales stay in this list on purpose. The shop needs to be able to see
+ * that a transaction was recorded and then cancelled — a sale that simply
+ * vanished from the history is indistinguishable from one that was never
+ * entered, and that is the question someone asks when the drawer does not
+ * balance. They are excluded from reports and from balances owed instead, which
+ * is where counting them would actually be wrong.
+ */
 export async function listSales(
   { supabase, shopId }: ShopContext,
   { limit = 50 }: { limit?: number } = {},
@@ -562,6 +581,11 @@ export async function listCustomersWithBalances(
       .eq("shop_id", shopId)
       .not("customer_id", "is", null)
       .neq("payment_status", "PAID")
+      // Voiding a credit sale marks its payments voided, which drops
+      // amount_paid to 0 and payment_status to CREDIT — the exact shape of an
+      // uncollected debt. Without this filter a cancelled sale would go on
+      // being chased, and for its full value.
+      .is("voided_at", null)
       .order("sale_date"),
   ]);
 
@@ -618,6 +642,9 @@ export async function listCustomerUnpaidSales(
     .eq("shop_id", shopId)
     .eq("customer_id", customerId)
     .neq("payment_status", "PAID")
+    // Same reason as listCustomersWithBalances: a voided sale reads as CREDIT
+    // with nothing paid, and nothing is owed on it.
+    .is("voided_at", null)
     .order("sale_date");
 
   if (error) {
@@ -632,6 +659,7 @@ type SalePaymentRow = {
   amount: string;
   collected_at: string;
   note: string | null;
+  voided_at: string | null;
   users: Embedded<{ name: string | null }>;
 };
 
@@ -641,6 +669,10 @@ type SalePaymentRow = {
  * Ordered by collected_at, which is when the money arrived — not created_at,
  * which is when the row was typed in. A payment entered the next morning
  * belongs in the sequence where it was collected.
+ *
+ * Payments voided along with their sale are returned too, marked. They no
+ * longer count towards anything, but the sale page is the one place the shop
+ * can see what was collected before the sale was cancelled.
  */
 export async function listSalePayments(
   { supabase, shopId }: ShopContext,
@@ -648,7 +680,7 @@ export async function listSalePayments(
 ): Promise<SalePayment[]> {
   const { data, error } = await supabase
     .from("sale_payments")
-    .select("id, amount, collected_at, note, users ( name )")
+    .select("id, amount, collected_at, note, voided_at, users ( name )")
     .eq("shop_id", shopId)
     .eq("sale_id", saleId)
     .order("collected_at");
@@ -662,6 +694,7 @@ export async function listSalePayments(
     amount: row.amount,
     collected_at: row.collected_at,
     note: row.note,
+    voided_at: row.voided_at,
     collected_by_name: one(row.users)?.name ?? null,
   }));
 }
