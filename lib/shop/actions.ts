@@ -334,7 +334,7 @@ export async function receiveStock(
 
     const productId = readString(form, "product_id");
     const batchNumber = requiredText(form, "batch_number", errors, {
-      label: "Batch number",
+      label: "Batch reference",
       max: 60,
     });
     const quantity = requiredNumber(form, "quantity_received", errors, {
@@ -403,7 +403,7 @@ export async function receiveStock(
     revalidatePath(`/dashboard/inventory/${productId}`);
     revalidatePath("/dashboard/products");
 
-    return success(`Received ${quantity} unit(s) as batch ${batchNumber}.`);
+    return success(`Received ${quantity} unit(s) under ref ${batchNumber}.`);
   });
 }
 

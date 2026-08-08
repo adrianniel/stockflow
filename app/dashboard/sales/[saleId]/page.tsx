@@ -11,7 +11,12 @@ import { getDashboardIdentity } from "@/lib/dashboard/identity";
 import { shopContextFor } from "@/lib/shop/context";
 import { getSale, listSaleItems } from "@/lib/shop/queries";
 import type { SaleItem } from "@/lib/shop/types";
-import { formatCurrency, formatDateTime, toNumber } from "@/lib/utils/format";
+import {
+  formatCurrency,
+  formatDateKey,
+  formatDateTime,
+  toNumber,
+} from "@/lib/utils/format";
 
 /**
  * One sale, line by line.
@@ -52,7 +57,11 @@ export default async function SaleDetailPage({
             {item.product_name ?? "Deleted product"}
           </p>
           <p className="text-xs text-slate-500">
-            {item.batch_number ? `Batch ${item.batch_number}` : "Batch removed"}
+            {item.batch_number
+              ? `Ref ${item.batch_number} · received ${formatDateKey(
+                  item.batch_received_date,
+                )}`
+              : "Batch removed"}
           </p>
         </div>
       ),

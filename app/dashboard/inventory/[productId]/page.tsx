@@ -17,7 +17,7 @@ import {
 import type { StockBatch } from "@/lib/shop/types";
 import {
   formatCurrency,
-  formatDate,
+  formatDateKey,
   formatNumber,
   formatPercent,
   toNumber,
@@ -75,12 +75,22 @@ export default async function ProductInventoryPage({
 
   const columns: Array<Column<StockBatch>> = [
     {
-      header: "Batch",
+      header: "Reference",
       cell: (batch) => (
         <div className="flex items-center gap-2">
-          <span className="font-medium text-slate-950">
-            {batch.batch_number}
-          </span>
+          <div>
+            <span className="font-medium text-slate-950">
+              {batch.batch_number}
+            </span>
+            {/*
+             * References are free-form and may repeat across arrivals, so the
+             * date rides along here — the Received column is hidden on mobile,
+             * where this would otherwise be the only thing shown.
+             */}
+            <span className="block text-xs text-slate-500 md:hidden">
+              {formatDateKey(batch.received_date)}
+            </span>
+          </div>
           {nextBatch?.id === batch.id ? <Badge>Next out</Badge> : null}
         </div>
       ),
@@ -88,7 +98,7 @@ export default async function ProductInventoryPage({
     {
       header: "Received",
       hideOnMobile: true,
-      cell: (batch) => formatDate(batch.received_date),
+      cell: (batch) => formatDateKey(batch.received_date),
     },
     {
       header: "Capital",
@@ -154,7 +164,13 @@ export default async function ProductInventoryPage({
           value={
             nextBatch ? formatCurrency(nextBatch.selling_price) : "—"
           }
-          delta={nextBatch ? `Batch ${nextBatch.batch_number}` : "No stock"}
+          delta={
+            nextBatch
+              ? `Ref ${nextBatch.batch_number} · ${formatDateKey(
+                  nextBatch.received_date,
+                )}`
+              : "No stock"
+          }
         />
       </div>
 

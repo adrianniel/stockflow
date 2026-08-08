@@ -401,7 +401,7 @@ This table controls inventory quantity and pricing history.
 | id                  | uuid      | Primary key                |
 | shop_id             | uuid      | Owner shop                 |
 | product_id          | uuid      | Related product            |
-| batch_number        | text      | Batch identifier           |
+| batch_number        | text      | Free-form arrival reference (not unique) |
 | quantity_received   | integer   | Original quantity          |
 | quantity_remaining  | integer   | Current available quantity |
 | capital_price       | decimal   | Purchase price per item    |
@@ -414,9 +414,27 @@ This table controls inventory quantity and pricing history.
 
 ---
 
+## Batch reference
+
+`batch_number` is a shop-chosen reference for the arrival, not a supplier
+serial and not a sequence the system generates. Shops typically use the arrival
+date (`080826` for 8 August 2026), a delivery receipt number (`DR-1042`), or
+whatever they already write on the box.
+
+It is deliberately **not unique**: two arrivals of the same product on the same
+day are ordinary, and the shop should not have to invent a distinct label for
+each. A batch is identified by `id` — that is what `sale_items.stock_batch_id`,
+`stock_adjustments.stock_batch_id` and the FIFO loop in `record_sale()` use.
+FIFO orders by `(received_date, created_at)` and never reads `batch_number`.
+
+Because references may repeat, anywhere the UI shows one it also shows the
+received date, price or remaining quantity so two arrivals stay tellable apart.
+
+---
+
 ## Example
 
-Batch 001:
+Reference 080126:
 
 ```
 Product:
@@ -437,7 +455,7 @@ Selling:
 
 ---
 
-Batch 002:
+Reference 080826:
 
 ```
 Product:

@@ -1,4 +1,4 @@
-import { toNumber } from "@/lib/utils/format";
+import { formatCurrency, formatDateKey, toNumber } from "@/lib/utils/format";
 
 import type { ShopContext } from "./context";
 import type {
@@ -417,6 +417,7 @@ type SaleItemRow = {
   stock_batch_id: string | null;
   stock_batches: Embedded<{
     batch_number: string;
+    received_date: string | null;
     products: Embedded<{ product_name: string }>;
   }>;
 };
@@ -445,6 +446,7 @@ export async function listSaleItems(
       stock_batch_id,
       stock_batches (
         batch_number,
+        received_date,
         products ( product_name )
       )
     `,
@@ -468,6 +470,7 @@ export async function listSaleItems(
       profit: row.profit,
       stock_batch_id: row.stock_batch_id,
       batch_number: batch?.batch_number ?? null,
+      batch_received_date: batch?.received_date ?? null,
       product_name: one(batch?.products ?? null)?.product_name ?? null,
     };
   });
@@ -664,6 +667,7 @@ type AdjustmentRow = {
   users: Embedded<{ name: string | null }>;
   stock_batches: Embedded<{
     batch_number: string;
+    received_date: string | null;
     products: Embedded<{ product_name: string }>;
   }>;
 };
@@ -683,6 +687,7 @@ export async function listAdjustments({
       users ( name ),
       stock_batches (
         batch_number,
+        received_date,
         products ( product_name )
       )
     `,
@@ -704,18 +709,27 @@ export async function listAdjustments({
       reason: row.reason,
       created_at: row.created_at,
       batch_number: batch?.batch_number ?? null,
+      batch_received_date: batch?.received_date ?? null,
       product_name: one(batch?.products ?? null)?.product_name ?? null,
       adjusted_by_name: one(row.users)?.name ?? null,
     };
   });
 }
 
-/** In-stock batches across the shop, for the adjustment picker. */
+/**
+ * In-stock batches across the shop, for the adjustment picker.
+ *
+ * `detail` carries received date, selling price and quantity because batch
+ * references are not unique: two arrivals of the same product may both be
+ * labelled 080826, and the reference alone would leave the owner guessing which
+ * row they are about to correct. Date and price are what actually tell them
+ * apart — they are the reason a second batch exists.
+ */
 export async function listAdjustableBatches({
   supabase,
   shopId,
 }: ShopContext): Promise<
-  Array<{ id: string; label: string; quantityRemaining: number }>
+  Array<{ id: string; label: string; detail: string; quantityRemaining: number }>
 > {
   const { data, error } = await supabase
     .from("stock_batches")
@@ -724,6 +738,8 @@ export async function listAdjustableBatches({
       id,
       batch_number,
       quantity_remaining,
+      selling_price,
+      received_date,
       products ( product_name )
     `,
     )
@@ -739,6 +755,8 @@ export async function listAdjustableBatches({
     id: string;
     batch_number: string;
     quantity_remaining: number;
+    selling_price: string;
+    received_date: string | null;
     products: Embedded<{ product_name: string }>;
   };
 
@@ -747,6 +765,13 @@ export async function listAdjustableBatches({
     label: `${one(row.products)?.product_name ?? "Unknown product"} — ${
       row.batch_number
     }`,
+    detail: [
+      // `received_date` is a date column, so formatDateKey — formatDate would
+      // parse it as UTC midnight and show the previous day west of UTC.
+      formatDateKey(row.received_date),
+      formatCurrency(row.selling_price),
+      `${row.quantity_remaining} on hand`,
+    ].join(" · "),
     quantityRemaining: row.quantity_remaining,
   }));
 }

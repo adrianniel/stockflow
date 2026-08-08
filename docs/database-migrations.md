@@ -261,7 +261,7 @@ Selling:
 - id
 - shop_id
 - product_id
-- batch_number
+- batch_number (free-form arrival reference, not unique — see Migration 021)
 - quantity_received
 - quantity_remaining
 - capital_price
@@ -643,7 +643,7 @@ Used for:
 
 ---
 
-# Migrations 008-016 — Application Development Phase
+# Migrations 008-021 — Application Development Phase
 
 Migrations 001-007 were applied through the Supabase dashboard. From 008 onward
 they are version-controlled SQL files under `supabase/migrations/`, named by
@@ -660,6 +660,11 @@ timestamp so they apply in order.
 | 014 | `20260801120600_record_sale_fifo.sql` | `record_sale()` — atomic FIFO checkout |
 | 015 | `20260801120700_account_provisioning.sql` | Assistant accounts, status, privilege tightening |
 | 016 | `20260801120800_shop_status_is_platform_only.sql` | Shop suspension restricted to SUPER_ADMIN |
+| 017 | `20260801120900_customers.sql` | `customers` table, so credit attaches to a person |
+| 018 | `20260801121000_sale_payments.sql` | `sale_payments` ledger — one row per instalment |
+| 019 | `20260801121100_amount_paid_derived.sql` | `sales.amount_paid` becomes a trigger-maintained sum |
+| 020 | `20260801121200_record_payment.sql` | `record_payment()`; `record_sale()` writes through the ledger |
+| 021 | `20260801121300_batch_reference_not_unique.sql` | Batch reference is free-form, duplicates allowed |
 
 Each file carries its own reasoning in a header comment. The entries below cover
 the ones that changed security or business rules rather than schema shape.
@@ -821,6 +826,40 @@ a platform decision (SRS 5.1).
 
 ---
 
+# Migration 021 — Batch Reference Is Free-Form
+
+## Purpose
+
+`stock_batches.batch_number` was meant to be a supplier-issued batch number,
+one per delivery, and migration 011 made (product, batch_number) unique on that
+assumption. Real shops use the field as a reference they choose themselves —
+usually the arrival date, written `080826` for 8 August 2026. Two arrivals of
+the same product on the same day then collide on the unique index and the
+"receive stock" action fails with a 23505 error for doing something ordinary.
+
+## Changes Implemented
+
+- `DROP INDEX public.stock_batches_product_batch_number_key` — the expression
+  unique index from migration 011. It was an index, not a table constraint, so
+  dropping it is the whole change.
+- `COMMENT ON COLUMN` restating the new contract: free-form, not unique, not
+  auto-numbered, exists so staff can tell two arrivals of the same product
+  apart.
+
+## Why It Is Safe
+
+Nothing in the system keys off `batch_number`. `sale_items.stock_batch_id` and
+`stock_adjustments.stock_batch_id` reference `stock_batches.id`, and the FIFO
+loop in `record_sale()` orders by `(received_date, created_at)` only. No join,
+no deduction, no profit figure reads the reference, and the migration writes no
+data — existing rows keep their values.
+
+Displays that show the reference (adjustment history, sale details, inventory)
+now pair it with the received date so two rows sharing a reference stay
+distinguishable.
+
+---
+
 # RLS Permission Structure
 
 Note: this section describes the structure as of Migration 012, which narrowed
@@ -892,15 +931,18 @@ StockFlow Database v1.1
 Status:
 
 ```
-COMPLETED — migrations 001-016 applied
+COMPLETED — migrations 001-021 applied
 ```
 
 Supports:
 
 - Multi-tenant shop isolation through RLS
 - Batch-based inventory with FIFO deduction
+- Free-form, non-unique batch references for stock arrivals
 - Atomic sale recording with server-side profit calculation
 - Discounts below capital price, and partial or credit payments
+- Per-instalment payment ledger with derived `sales.amount_paid`
+- Customers, so credit is tracked per person
 - Account provisioning for owners and assistants
 - Account and shop suspension
 

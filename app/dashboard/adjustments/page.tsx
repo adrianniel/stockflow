@@ -6,7 +6,7 @@ import { getDashboardIdentity } from "@/lib/dashboard/identity";
 import { shopContextFor } from "@/lib/shop/context";
 import { listAdjustableBatches, listAdjustments } from "@/lib/shop/queries";
 import type { StockAdjustment } from "@/lib/shop/types";
-import { formatDateTime } from "@/lib/utils/format";
+import { formatDateKey, formatDateTime } from "@/lib/utils/format";
 
 import { AdjustStockDialog } from "./adjust-stock-dialog";
 
@@ -44,7 +44,11 @@ export default async function AdjustmentsPage() {
             {row.product_name ?? "Deleted product"}
           </p>
           <p className="text-xs text-slate-500">
-            {row.batch_number ? `Batch ${row.batch_number}` : "Batch removed"}
+            {row.batch_number
+              ? `Ref ${row.batch_number} · received ${formatDateKey(
+                  row.batch_received_date,
+                )}`
+              : "Batch removed"}
           </p>
         </div>
       ),

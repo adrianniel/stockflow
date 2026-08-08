@@ -92,6 +92,8 @@ export type SaleItem = {
   stock_batch_id: string | null;
   product_name: string | null;
   batch_number: string | null;
+  /** Shown beside the reference, which is free-form and may repeat. */
+  batch_received_date: string | null;
 };
 
 export type StockAdjustment = {
@@ -100,6 +102,8 @@ export type StockAdjustment = {
   reason: string;
   created_at: string | null;
   batch_number: string | null;
+  /** Shown beside the reference, which is free-form and may repeat. */
+  batch_received_date: string | null;
   product_name: string | null;
   adjusted_by_name: string | null;
 };

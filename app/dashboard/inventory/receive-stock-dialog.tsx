@@ -130,15 +130,15 @@ function ReceiveStockForm({
         )}
 
         <Field
-          label="Batch number"
+          label="Batch reference"
           htmlFor="batch-number"
           error={fieldError(state, "batch_number")}
-          hint="Your own reference — a delivery receipt number works well."
+          hint="However you label this arrival — 080826, DR-1042, anything. It does not have to be unique or in sequence."
         >
           <Input
             id="batch-number"
             name="batch_number"
-            placeholder="DR-1042"
+            placeholder="080826"
             maxLength={60}
             required
           />

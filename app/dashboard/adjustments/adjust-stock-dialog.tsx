@@ -14,6 +14,8 @@ import { adjustStock } from "@/lib/shop/actions";
 type Batch = {
   id: string;
   label: string;
+  /** Date, price and quantity — what tells two same-named batches apart. */
+  detail: string;
   quantityRemaining: number;
 };
 
@@ -79,7 +81,7 @@ function AdjustStockForm({
           error={fieldError(state, "stock_batch_id")}
           hint={
             selected
-              ? `${selected.quantityRemaining} unit(s) currently on hand.`
+              ? `${selected.label} · ${selected.detail}`
               : "Type to search by product or batch reference."
           }
         >
@@ -89,7 +91,7 @@ function AdjustStockForm({
             options={batches.map((batch) => ({
               value: batch.id,
               label: batch.label,
-              hint: `${batch.quantityRemaining} on hand`,
+              hint: batch.detail,
             }))}
             placeholder="Choose a batch"
             emptyLabel="No matching batch"
