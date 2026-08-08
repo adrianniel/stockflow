@@ -19,16 +19,24 @@ export function SubmitButton({
   pendingLabel = "Saving...",
   variant = "primary",
   className,
+  disabled = false,
 }: {
   children: React.ReactNode;
   pendingLabel?: string;
   variant?: ButtonVariant;
   className?: string;
+  /** Blocked for a reason of the form's own, on top of "already in flight". */
+  disabled?: boolean;
 }) {
   const { pending } = useFormStatus();
 
   return (
-    <Button type="submit" variant={variant} disabled={pending} className={className}>
+    <Button
+      type="submit"
+      variant={variant}
+      disabled={pending || disabled}
+      className={className}
+    >
       {pending ? pendingLabel : children}
     </Button>
   );

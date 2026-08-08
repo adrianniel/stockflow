@@ -4,6 +4,7 @@ import { useActionState, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field, Input, Select } from "@/components/ui/field";
 import { FormAlert, SubmitButton, fieldError } from "@/components/ui/form-status";
@@ -263,24 +264,27 @@ export function SaleComposer({
                 error={fieldError(state, "customer_id")}
                 hint={
                   customers.length > 0
-                    ? "Who owes for this sale."
+                    ? "Who owes for this sale. Type to search."
                     : "Add a customer on the Credit page first."
                 }
               >
-                <Select
+                {/* Remounts when the payment status changes so a customer
+                    picked, then abandoned by switching to Paid and back, does
+                    not linger in the box while `customerId` reads empty. */}
+                <Combobox
+                  key={paymentStatus}
                   id="sale-customer"
-                  value={customerId}
-                  onChange={(event) => setCustomerId(event.target.value)}
+                  options={customers.map((customer) => ({
+                    value: customer.id,
+                    label: customer.name,
+                  }))}
+                  defaultValue={customerId}
+                  placeholder="Select a customer"
+                  emptyLabel="No matching customer"
                   disabled={customers.length === 0}
-                  required
-                >
-                  <option value="">Select a customer</option>
-                  {customers.map((customer) => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.name}
-                    </option>
-                  ))}
-                </Select>
+                  invalid={Boolean(fieldError(state, "customer_id"))}
+                  onValueChange={setCustomerId}
+                />
               </Field>
             ) : null}
           </div>

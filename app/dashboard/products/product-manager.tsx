@@ -4,9 +4,10 @@ import { useActionState, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
 import { ConfirmForm } from "@/components/ui/confirm-form";
 import { DataTable, type Column } from "@/components/ui/data-table";
-import { Field, Input, Select, Textarea } from "@/components/ui/field";
+import { Field, Input, Textarea } from "@/components/ui/field";
 import { FormAlert, SubmitButton, fieldError } from "@/components/ui/form-status";
 import { Modal } from "@/components/ui/modal";
 import { PanelHeader } from "@/components/ui/panel";
@@ -47,6 +48,11 @@ export function ProductManager({
   const [editing, setEditing] = useState<ProductRow | null>(null);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
+
+  const categoryOptions = useMemo(
+    () => categories.map((category) => ({ value: category.id, label: category.name })),
+    [categories],
+  );
 
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -167,18 +173,15 @@ export function ProductManager({
           <label htmlFor="product-category-filter" className="sr-only">
             Filter by category
           </label>
-          <Select
+          <Combobox
             id="product-category-filter"
-            value={categoryFilter}
-            onChange={(event) => setCategoryFilter(event.target.value)}
-          >
-            <option value="">All categories</option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </Select>
+            options={categoryOptions}
+            defaultValue=""
+            placeholder="All categories"
+            clearLabel="All categories"
+            emptyLabel="No matching category"
+            onValueChange={setCategoryFilter}
+          />
         </div>
       </div>
 
@@ -293,21 +296,21 @@ function ProductDialog({
           hint={
             categories.length === 0
               ? "No categories yet — you can add one later."
-              : "Optional."
+              : "Optional. Type to search."
           }
         >
-          <Select
+          <Combobox
             id="product-category"
             name="category_id"
+            options={categories.map((category) => ({
+              value: category.id,
+              label: category.name,
+            }))}
             defaultValue={product?.category_id ?? ""}
-          >
-            <option value="">No category</option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </Select>
+            placeholder="No category"
+            clearLabel="No category"
+            emptyLabel="No matching category"
+          />
         </Field>
 
         <Field

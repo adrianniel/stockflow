@@ -4,7 +4,8 @@ import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import { Field, Input, Select, Textarea } from "@/components/ui/field";
+import { Combobox } from "@/components/ui/combobox";
+import { Field, Input, Textarea } from "@/components/ui/field";
 import { FormAlert, SubmitButton, fieldError } from "@/components/ui/form-status";
 import { Modal } from "@/components/ui/modal";
 import { IDLE } from "@/lib/shop/action-result";
@@ -79,25 +80,22 @@ function AdjustStockForm({
           hint={
             selected
               ? `${selected.quantityRemaining} unit(s) currently on hand.`
-              : "Choose the batch to correct."
+              : "Type to search by product or batch reference."
           }
         >
-          <Select
+          <Combobox
             id="adjust-batch"
             name="stock_batch_id"
-            value={batchId}
-            onChange={(event) => setBatchId(event.target.value)}
-            required
-          >
-            <option value="" disabled>
-              Choose a batch
-            </option>
-            {batches.map((batch) => (
-              <option key={batch.id} value={batch.id}>
-                {batch.label} ({batch.quantityRemaining} on hand)
-              </option>
-            ))}
-          </Select>
+            options={batches.map((batch) => ({
+              value: batch.id,
+              label: batch.label,
+              hint: `${batch.quantityRemaining} on hand`,
+            }))}
+            placeholder="Choose a batch"
+            emptyLabel="No matching batch"
+            invalid={Boolean(fieldError(state, "stock_batch_id"))}
+            onValueChange={setBatchId}
+          />
         </Field>
 
         <Field
@@ -139,7 +137,7 @@ function AdjustStockForm({
             Cancel
           </Button>
 
-          <SubmitButton pendingLabel="Recording...">
+          <SubmitButton pendingLabel="Recording..." disabled={batchId === ""}>
             Record adjustment
           </SubmitButton>
         </div>

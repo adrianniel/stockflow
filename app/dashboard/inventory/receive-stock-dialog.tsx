@@ -3,7 +3,8 @@
 import { useActionState, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Field, Input, Select } from "@/components/ui/field";
+import { Combobox } from "@/components/ui/combobox";
+import { Field, Input } from "@/components/ui/field";
 import { FormAlert, SubmitButton, fieldError } from "@/components/ui/form-status";
 import { Modal } from "@/components/ui/modal";
 import { IDLE } from "@/lib/shop/action-result";
@@ -73,6 +74,18 @@ function ReceiveStockForm({
   const [capitalPrice, setCapitalPrice] = useState("");
   const [interest, setInterest] = useState(String(defaultInterest));
 
+  /**
+   * Mirrors the product combobox so the submit button can be blocked while it
+   * is empty.
+   *
+   * The hidden input the combobox posts through cannot carry native `required`,
+   * so this restores the "cannot submit without a product" guarantee the
+   * <select> had. `receiveStock` validates it again regardless — this only saves
+   * a round trip. Pre-filled when the dialog is opened from a product's own
+   * page, where the product is fixed and no combobox renders.
+   */
+  const [productId, setProductId] = useState(fixedProductId ?? "");
+
   useEffect(() => {
     if (state.status === "success") {
       onClose();
@@ -99,17 +112,20 @@ function ReceiveStockForm({
             label="Product"
             htmlFor="batch-product"
             error={fieldError(state, "product_id")}
+            hint="Type to search your catalogue."
           >
-            <Select id="batch-product" name="product_id" defaultValue="" required>
-              <option value="" disabled>
-                Choose a product
-              </option>
-              {products.map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.label}
-                </option>
-              ))}
-            </Select>
+            <Combobox
+              id="batch-product"
+              name="product_id"
+              options={products.map((product) => ({
+                value: product.id,
+                label: product.label,
+              }))}
+              placeholder="Choose a product"
+              emptyLabel="No matching product"
+              invalid={Boolean(fieldError(state, "product_id"))}
+              onValueChange={setProductId}
+            />
           </Field>
         )}
 
@@ -206,7 +222,9 @@ function ReceiveStockForm({
             Cancel
           </Button>
 
-          <SubmitButton pendingLabel="Recording...">Record arrival</SubmitButton>
+          <SubmitButton pendingLabel="Recording..." disabled={productId === ""}>
+            Record arrival
+          </SubmitButton>
         </div>
       </form>
     </Modal>

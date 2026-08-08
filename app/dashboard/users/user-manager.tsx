@@ -4,9 +4,10 @@ import { useActionState, useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
 import { ConfirmForm } from "@/components/ui/confirm-form";
 import { DataTable, type Column } from "@/components/ui/data-table";
-import { Field, Input, Select } from "@/components/ui/field";
+import { Field, Input } from "@/components/ui/field";
 import { FormAlert, SubmitButton, fieldError } from "@/components/ui/form-status";
 import { Modal } from "@/components/ui/modal";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -190,6 +191,7 @@ function CreateOwnerDialog({
   shops: ShopOption[];
 }) {
   const [state, formAction] = useActionState(createOwner, IDLE);
+  const [shopId, setShopId] = useState("");
 
   useEffect(() => {
     if (state.status === "success") {
@@ -209,17 +211,20 @@ function CreateOwnerDialog({
           label="Shop"
           htmlFor="owner-shop"
           error={fieldError(state, "shop_id")}
+          hint="Type to search."
         >
-          <Select id="owner-shop" name="shop_id" defaultValue="" required>
-            <option value="" disabled>
-              Choose a shop
-            </option>
-            {shops.map((shop) => (
-              <option key={shop.id} value={shop.id}>
-                {shop.shop_name}
-              </option>
-            ))}
-          </Select>
+          <Combobox
+            id="owner-shop"
+            name="shop_id"
+            options={shops.map((shop) => ({
+              value: shop.id,
+              label: shop.shop_name,
+            }))}
+            placeholder="Choose a shop"
+            emptyLabel="No matching shop"
+            invalid={Boolean(fieldError(state, "shop_id"))}
+            onValueChange={setShopId}
+          />
         </Field>
 
         <Field
@@ -275,7 +280,9 @@ function CreateOwnerDialog({
             Cancel
           </Button>
 
-          <SubmitButton pendingLabel="Creating...">Create owner</SubmitButton>
+          <SubmitButton pendingLabel="Creating..." disabled={shopId === ""}>
+            Create owner
+          </SubmitButton>
         </div>
       </form>
     </Modal>
