@@ -129,8 +129,8 @@ export function ProductManager({
             title={`Delete "${row.product_name}"?`}
             description={
               row.quantityOnHand > 0
-                ? `This product still has ${row.quantityOnHand} unit(s) in stock. Deleting it removes all of its stock batches. Past sales stay recorded but lose their link to those batches.`
-                : "This removes the product and all of its stock batches. Past sales stay recorded."
+                ? `This product still has ${row.quantityOnHand} unit(s) in stock. Products with stock history cannot be deleted.`
+                : "Products with stock history cannot be deleted. Products without stock arrivals can still be removed."
             }
             confirmLabel="Delete product"
           />

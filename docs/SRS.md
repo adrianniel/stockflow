@@ -212,6 +212,12 @@ Quantity:
 
 Both batches remain separate.
 
+When a batch reaches zero remaining quantity, it is marked sold out by that
+derived quantity and remains in the database as historical inventory data. Sold
+out batches are hidden from active selling inventory but remain visible on the
+product's batch history. Batch and product deletion must not remove historical
+stock-batch records.
+
 ---
 
 # 7. Inventory Business Rules

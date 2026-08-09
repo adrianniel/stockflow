@@ -666,6 +666,7 @@ timestamp so they apply in order.
 | 020 | `20260801121200_record_payment.sql` | `record_payment()`; `record_sale()` writes through the ledger |
 | 021 | `20260801121300_batch_reference_not_unique.sql` | Batch reference is free-form, duplicates allowed |
 | 022 | `20260801121400_record_sale_explicit_batch.sql` | A sale line may name its batch; FIFO becomes the fallback |
+| 026 | `20260801121800_batch_lifecycle_protection.sql` | Protects sold-out batch history from deletion |
 
 Each file carries its own reasoning in a header comment. The entries below cover
 the ones that changed security or business rules rather than schema shape.
@@ -1182,13 +1183,13 @@ Restrictions:
 # Current Database Version
 
 ```
-StockFlow Database v1.2
+StockFlow Database v1.3
 ```
 
 Status:
 
 ```
-COMPLETED — migrations 001-025 applied
+COMPLETED — migrations 001-026 applied
 ```
 
 Supports:
@@ -1208,6 +1209,7 @@ Supports:
 - Credit and partial payment ledger entries dated by actual collection time,
   with entry timestamps preserved separately
 - Dynamic daily, weekly and monthly PDF report export without persisted files
+- Sold-out batches retained as historical records; deletion is blocked
 
 ---
 
@@ -1267,6 +1269,18 @@ behavior is unchanged.
 
 ---
 
+# Migration 026 — Batch Lifecycle Protection
+
+File: `20260801121800_batch_lifecycle_protection.sql`
+
+Sold-out batches remain in `stock_batches` with `quantity_remaining = 0` so
+their original prices, dates, sale links, and adjustment history remain
+auditable. The migration removes direct batch deletion and prevents deleting a
+product that has any stock-batch history, including batches that are already
+sold out. No existing rows are changed.
+
+---
+
 # Future Migration Guidelines
 
 All future database changes must:
@@ -1284,5 +1298,5 @@ All future database changes must:
 Current Version:
 
 ```
-StockFlow Database v1.1
+StockFlow Database v1.3
 ```

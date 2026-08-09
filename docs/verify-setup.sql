@@ -246,6 +246,26 @@ checks AS (
         'apply 20260801120500 — assistants can edit shop settings'
 
     UNION ALL SELECT
+        'policy: stock batches cannot be deleted (20260801121800)',
+        NOT EXISTS (
+            SELECT 1 FROM pg_policies
+            WHERE schemaname = 'public'
+              AND tablename = 'stock_batches'
+              AND cmd = 'DELETE'
+        ),
+        'apply 20260801121800 — deleting a sold-out batch removes historical inventory evidence'
+
+    UNION ALL SELECT
+        'trigger: products with batch history cannot be deleted (20260801121800)',
+        EXISTS (
+            SELECT 1 FROM pg_trigger
+            WHERE tgrelid = 'public.products'::regclass
+              AND tgname = 'prevent_product_delete_with_batches'
+              AND NOT tgisinternal
+        ),
+        'apply 20260801121800 — product deletion would cascade historical stock batches'
+
+    UNION ALL SELECT
         'trigger: 2-assistant cap (20260801120700)',
         EXISTS (
             SELECT 1 FROM pg_trigger

@@ -91,7 +91,11 @@ export default async function ProductInventoryPage({
               {formatDateKey(batch.received_date)}
             </span>
           </div>
-          {nextBatch?.id === batch.id ? <Badge>Next out</Badge> : null}
+          {batch.quantity_remaining === 0 ? (
+            <Badge tone="neutral">Sold out</Badge>
+          ) : nextBatch?.id === batch.id ? (
+            <Badge tone="positive">Next out</Badge>
+          ) : null}
         </div>
       ),
     },
