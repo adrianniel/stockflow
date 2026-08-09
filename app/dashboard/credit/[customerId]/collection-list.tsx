@@ -62,6 +62,9 @@ function SaleCard({
 }) {
   const [state, action] = useActionState(recordPayment, IDLE);
   const [showHistory, setShowHistory] = useState(false);
+  const [collectedAt, setCollectedAt] = useState(() =>
+    toDateTimeLocal(new Date()),
+  );
 
   const outstanding = sale.total - sale.paid;
 
@@ -69,6 +72,9 @@ function SaleCard({
     <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
+          <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+            Original sale date
+          </p>
           <p className="text-sm font-semibold text-slate-950">
             {formatDate(sale.saleDate)}
           </p>
@@ -80,7 +86,7 @@ function SaleCard({
 
         <div className="flex items-center gap-3">
           <Badge tone={sale.paymentStatus === "PARTIAL" ? "warning" : "danger"}>
-            {sale.paymentStatus}
+            {sale.paymentStatus === "PARTIAL" ? "Partially paid" : "Credit"}
           </Badge>
           <div className="text-right">
             <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
@@ -101,7 +107,7 @@ function SaleCard({
 
         <FormAlert state={state} />
 
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)_auto] sm:items-end">
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,10rem)_minmax(0,14rem)_minmax(0,1fr)_auto] sm:items-end">
           <Field
             label="Amount"
             htmlFor={`amount-${sale.id}`}
@@ -116,6 +122,23 @@ function SaleCard({
               min="0.01"
               max={outstanding}
               placeholder={`${outstanding}`}
+              required
+            />
+          </Field>
+
+          <Field
+            label="Received date and time"
+            htmlFor={`collected-at-${sale.id}`}
+            error={fieldError(state, "collected_at")}
+            hint="When the customer actually paid."
+          >
+            <Input
+              id={`collected-at-${sale.id}`}
+              name="collected_at"
+              type="datetime-local"
+              value={collectedAt}
+              suppressHydrationWarning
+              onChange={(event) => setCollectedAt(event.target.value)}
               required
             />
           </Field>
@@ -160,7 +183,12 @@ function SaleCard({
                     {formatCurrency(payment.amount)}
                   </span>
                   <span className="text-xs text-slate-500">
-                    {formatDateTime(payment.collected_at)}
+                    Received {formatDateTime(payment.collected_at)}
+                    {isDelayedEntry(payment) ? (
+                      <span className="block">
+                        Entered {formatDateTime(payment.created_at)}
+                      </span>
+                    ) : null}
                     {payment.collected_by_name
                       ? ` · ${payment.collected_by_name}`
                       : ""}
@@ -173,5 +201,20 @@ function SaleCard({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function toDateTimeLocal(value: Date): string {
+  const pad = (part: number) => String(part).padStart(2, "0");
+
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}`;
+}
+
+function isDelayedEntry(payment: SalePayment): boolean {
+  return (
+    Math.abs(
+      new Date(payment.created_at).getTime() -
+        new Date(payment.collected_at).getTime(),
+    ) >= 60_000
   );
 }

@@ -342,6 +342,28 @@ checks AS (
         'apply 20260801121600 — amending a sale fails with PGRST202 (function not found)'
 
     UNION ALL SELECT
+        'function: record_payment preserves received timestamp (20260801121700)',
+        EXISTS (
+            SELECT 1 FROM pg_proc p
+            JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = 'public'
+              AND p.proname = 'record_payment'
+              AND p.prosrc LIKE '%v_collected_at := COALESCE(p_collected_at, now())%'
+              AND p.prosrc LIKE '%cannot be in the future%'
+        ),
+        'apply 20260801121700 — payment dates are not validated by the database'
+
+    UNION ALL SELECT
+        'trigger: payment received time cannot be future (20260801121700)',
+        EXISTS (
+            SELECT 1 FROM pg_trigger
+            WHERE tgrelid = 'public.sale_payments'::regclass
+              AND tgname = 'sale_payments_validate_collected_at'
+              AND NOT tgisinternal
+        ),
+        'apply 20260801121700 — a direct ledger write could put a payment in a future report'
+
+    UNION ALL SELECT
         'index: one replacement per original sale (20260801121600)',
         EXISTS (
             SELECT 1 FROM pg_indexes

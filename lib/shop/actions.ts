@@ -932,6 +932,20 @@ export async function recordPayment(
       min: 0.01,
     });
     const note = readOptionalString(form, "note");
+    const collectedAtRaw = readString(form, "collected_at");
+    let collectedAt: string | null = null;
+
+    if (collectedAtRaw !== "") {
+      const parsed = new Date(collectedAtRaw);
+
+      if (Number.isNaN(parsed.getTime())) {
+        errors.add("collected_at", "Enter a valid payment date and time.");
+      } else if (parsed.getTime() > Date.now() + 60_000) {
+        errors.add("collected_at", "The received date and time cannot be in the future.");
+      } else {
+        collectedAt = parsed.toISOString();
+      }
+    }
 
     // Only used to revalidate the page the payment was taken on. Not trusted
     // for anything else: `record_payment()` derives the shop and the customer
@@ -954,7 +968,7 @@ export async function recordPayment(
     const { error } = await supabase.rpc("record_payment", {
       p_sale_id: saleId,
       p_amount: money(amount),
-      p_collected_at: null,
+      p_collected_at: collectedAt,
       p_note: note,
     });
 

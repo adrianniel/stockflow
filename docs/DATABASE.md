@@ -707,6 +707,13 @@ Rules:
 All of this happens inside `void_sale()`, in one transaction. See Migration 023
 in `database-migrations.md`.
 
+Payment collections are ledger rows, not edits to the sale. `collected_at` is
+when the customer handed over the money and `created_at` is when staff entered
+the row. Revenue reports use `sales.sale_date`; daily and monthly collection
+reports use `sale_payments.collected_at`. A later payment therefore changes the
+collection day without changing the original sale date. `amount_paid` and
+`payment_status` remain trigger-derived.
+
 ---
 
 # 8. Profit Calculation

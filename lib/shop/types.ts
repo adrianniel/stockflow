@@ -170,6 +170,7 @@ export type SalePayment = {
   id: string;
   amount: string;
   collected_at: string;
+  created_at: string;
   note: string | null;
   collected_by_name: string | null;
   /**

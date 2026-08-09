@@ -68,7 +68,7 @@ export default async function SaleDetailPage({
 
   const paymentColumns: Array<Column<SalePayment>> = [
     {
-      header: "Collected",
+      header: "Received",
       cell: (payment) => (
         <div>
           <p className="font-medium text-slate-950">
@@ -76,6 +76,9 @@ export default async function SaleDetailPage({
           </p>
           <p className="text-xs text-slate-500">
             {payment.collected_by_name ?? "Unknown staff"}
+            {Math.abs(new Date(payment.created_at).getTime() - new Date(payment.collected_at).getTime()) >= 60_000
+              ? ` · entered ${formatDateTime(payment.created_at)}`
+              : ""}
             {payment.note ? ` · ${payment.note}` : ""}
           </p>
         </div>

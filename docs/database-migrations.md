@@ -1182,13 +1182,13 @@ Restrictions:
 # Current Database Version
 
 ```
-StockFlow Database v1.1
+StockFlow Database v1.2
 ```
 
 Status:
 
 ```
-COMPLETED — migrations 001-023 applied
+COMPLETED — migrations 001-025 applied
 ```
 
 Supports:
@@ -1205,6 +1205,8 @@ Supports:
 - Account and shop suspension
 - Voiding a recorded sale, with the stock returned to its original batches and
   the sale kept in the history
+- Credit and partial payment ledger entries dated by actual collection time,
+  with entry timestamps preserved separately
 
 ---
 
@@ -1232,6 +1234,35 @@ The original and replacement are both retained. Reports filter on
 `voided_at IS NULL`, so only the active replacement contributes to totals.
 Refunds and overpayment handling remain outside MVP; old payment rows are
 voided and replacement payments are new ledger rows.
+
+---
+
+# Migration 025 — Credit and Partial Payment Improvements
+
+File: `20260801121700_credit_payment_improvements.sql`
+
+## Purpose
+
+Keep the date a customer hands over money separate from the date the payment is
+entered. The existing ledger already has both `collected_at` and `created_at`;
+this migration hardens the payment RPC that writes them.
+
+## Changes Implemented
+
+- `record_payment()` continues to lock the live sale and insert one payment row.
+- An explicit `p_collected_at` is preserved as the actual received timestamp.
+- Future collection timestamps are refused by the database.
+- A payment trigger applies the same future-date guard to direct ledger writes.
+- `created_at` remains the automatic ledger-entry timestamp.
+- `amount_paid` and `payment_status` remain trigger-derived.
+
+Reports continue to use `sales.sale_date` for revenue and
+`sale_payments.collected_at` for collections, so a later payment against an
+older sale appears on the day it was received. Customer payments remain
+allocated to one sale at a time.
+
+Refunds and overpayments are outside this feature. Existing amendment and void
+behavior is unchanged.
 
 ---
 

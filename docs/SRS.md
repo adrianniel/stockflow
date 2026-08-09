@@ -325,6 +325,12 @@ The payment ledger limitation remains: original payments are marked voided and
 the replacement starts a new payment history. Refunds and overpayment handling
 are outside MVP.
 
+Credit and partial payments are recorded as separate ledger entries. A payment
+stores both the time it was received and the time it was entered. Reports use
+the sale date for revenue and the received time for collections, so a later
+payment against an earlier sale appears on the actual collection day without
+moving the sale.
+
 ---
 
 # 9. FIFO Inventory Deduction

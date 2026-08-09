@@ -685,6 +685,7 @@ type SalePaymentRow = {
   id: string;
   amount: string;
   collected_at: string;
+  created_at: string;
   note: string | null;
   voided_at: string | null;
   users: Embedded<{ name: string | null }>;
@@ -707,7 +708,7 @@ export async function listSalePayments(
 ): Promise<SalePayment[]> {
   const { data, error } = await supabase
     .from("sale_payments")
-    .select("id, amount, collected_at, note, voided_at, users ( name )")
+    .select("id, amount, collected_at, created_at, note, voided_at, users ( name )")
     .eq("shop_id", shopId)
     .eq("sale_id", saleId)
     .order("collected_at");
@@ -720,6 +721,7 @@ export async function listSalePayments(
     id: row.id,
     amount: row.amount,
     collected_at: row.collected_at,
+    created_at: row.created_at,
     note: row.note,
     voided_at: row.voided_at,
     collected_by_name: one(row.users)?.name ?? null,
