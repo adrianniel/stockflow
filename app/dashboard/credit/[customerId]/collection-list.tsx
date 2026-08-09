@@ -101,6 +101,12 @@ function SaleCard({
 
       <form action={action} className="mt-4 space-y-3">
         <input type="hidden" name="sale_id" value={sale.id} />
+        <input
+          type="hidden"
+          name="collected_at"
+          value={toIsoTimestamp(collectedAt)}
+          suppressHydrationWarning
+        />
         {/* Lets the action revalidate this page after the payment. The server
             still derives shop and customer from the sale itself. */}
         <input type="hidden" name="customer_id" value={customerId} />
@@ -134,7 +140,7 @@ function SaleCard({
           >
             <Input
               id={`collected-at-${sale.id}`}
-              name="collected_at"
+              name="collected_at_local"
               type="datetime-local"
               value={collectedAt}
               suppressHydrationWarning
@@ -208,6 +214,18 @@ function toDateTimeLocal(value: Date): string {
   const pad = (part: number) => String(part).padStart(2, "0");
 
   return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}`;
+}
+
+/**
+ * `datetime-local` deliberately has no timezone information. Convert the
+ * browser-local value before it crosses the server boundary so the action and
+ * PostgreSQL compare the actual instant rather than reinterpreting the local
+ * wall-clock time in the server's timezone.
+ */
+function toIsoTimestamp(value: string): string {
+  const parsed = new Date(value);
+
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString();
 }
 
 function isDelayedEntry(payment: SalePayment): boolean {

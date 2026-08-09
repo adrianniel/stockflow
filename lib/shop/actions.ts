@@ -936,9 +936,13 @@ export async function recordPayment(
     let collectedAt: string | null = null;
 
     if (collectedAtRaw !== "") {
+      // The browser form submits an ISO value with an explicit `Z` offset.
+      // Reject timezone-less values instead of letting a UTC server reinterpret
+      // a user's local `datetime-local` wall-clock time.
+      const hasTimezone = /(?:z|[+-]\d{2}:\d{2})$/i.test(collectedAtRaw);
       const parsed = new Date(collectedAtRaw);
 
-      if (Number.isNaN(parsed.getTime())) {
+      if (!hasTimezone || Number.isNaN(parsed.getTime())) {
         errors.add("collected_at", "Enter a valid payment date and time.");
       } else if (parsed.getTime() > Date.now() + 60_000) {
         errors.add("collected_at", "The received date and time cannot be in the future.");
