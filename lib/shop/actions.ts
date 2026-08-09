@@ -582,6 +582,156 @@ export async function recordSale(
   });
 }
 
+/**
+ * Voids a live sale and records its replacement in one database transaction.
+ * The database function owns the batch restoration/deduction and payment
+ * ledger work; this action only validates the form and forwards the cart.
+ */
+export async function amendSale(
+  _previous: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  return withShop(async () => {
+    const { supabase } = await getShopContext("OWNER");
+    const errors = new FormErrors();
+    const saleId = readString(form, "sale_id");
+    const reason = requiredText(form, "amendment_reason", errors, {
+      label: "Reason",
+      max: 300,
+    });
+
+    if (!isUuid(saleId)) {
+      return failure("That sale could not be found.");
+    }
+
+    const paymentStatus = readString(form, "payment_status") || "PAID";
+
+    if (!isPaymentStatus(paymentStatus)) {
+      return failure("Choose a valid payment status.");
+    }
+
+    const rawItems = readString(form, "items");
+
+    if (rawItems === "") {
+      return failure("Add at least one item to the replacement sale.");
+    }
+
+    let parsed: unknown;
+
+    try {
+      parsed = JSON.parse(rawItems);
+    } catch {
+      return failure("The replacement sale could not be read. Please try again.");
+    }
+
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      return failure("Add at least one item to the replacement sale.");
+    }
+
+    const items: SaleItemInput[] = [];
+
+    for (const entry of parsed) {
+      if (typeof entry !== "object" || entry === null) {
+        return failure("One of the replacement lines is invalid.");
+      }
+
+      const line = entry as Record<string, unknown>;
+      const productId = typeof line.productId === "string" ? line.productId : "";
+      const quantity = Number(line.quantity);
+
+      if (!isUuid(productId)) {
+        return failure("One of the replacement lines has an invalid product.");
+      }
+
+      if (!Number.isInteger(quantity) || quantity <= 0) {
+        return failure("Every quantity must be a whole number above zero.");
+      }
+
+      const item: SaleItemInput = { product_id: productId, quantity };
+      const batchId = line.stockBatchId;
+
+      if (batchId !== null && batchId !== undefined && batchId !== "") {
+        if (typeof batchId !== "string" || !isUuid(batchId)) {
+          return failure("One of the replacement lines has an invalid batch.");
+        }
+
+        item.stock_batch_id = batchId;
+      }
+
+      const override = line.actualSellingPrice;
+
+      if (override !== null && override !== undefined && override !== "") {
+        const price = Number(override);
+
+        if (!Number.isFinite(price) || price < 0) {
+          return failure("An adjusted price is not a valid amount.");
+        }
+
+        item.actual_selling_price = money(price);
+      }
+
+      items.push(item);
+    }
+
+    let amountPaid: number | null = null;
+
+    if (paymentStatus === "PARTIAL") {
+      const value = requiredNumber(form, "amount_paid", errors, {
+        label: "Amount paid",
+        min: 0.01,
+      });
+
+      if (errors.hasErrors) {
+        return failure("Check the highlighted field.", errors.all);
+      }
+
+      amountPaid = money(value);
+    }
+
+    const customerId = readOptionalUuid(form, "customer_id");
+
+    if (paymentStatus !== "PAID" && customerId === null) {
+      return failure("Choose a customer for a credit or partial replacement.", {
+        customer_id: "Select who owes for this replacement sale.",
+      });
+    }
+
+    if (errors.hasErrors) {
+      return failure("Check the highlighted fields.", errors.all);
+    }
+
+    const { data, error } = await supabase.rpc("amend_sale", {
+      p_sale_id: saleId,
+      p_reason: reason,
+      p_items: items,
+      p_payment_status: paymentStatus,
+      p_amount_paid: amountPaid,
+      p_customer_id: customerId,
+    });
+
+    if (error) {
+      return databaseFailure(error, "Could not amend this sale.");
+    }
+
+    const replacementId = typeof data === "string" ? data : null;
+
+    revalidatePath("/dashboard/sales");
+    revalidatePath(`/dashboard/sales/${saleId}`);
+    if (replacementId) {
+      revalidatePath(`/dashboard/sales/${replacementId}`);
+    }
+    revalidatePath("/dashboard/inventory");
+    revalidatePath("/dashboard/adjustments");
+    revalidatePath("/dashboard/credit");
+    revalidatePath("/dashboard/reports");
+    revalidatePath("/dashboard/reports/[date]", "page");
+    revalidatePath("/dashboard/owner");
+    revalidatePath("/dashboard/assistant");
+
+    return success("Sale amended. The original remains in history.", replacementId ?? undefined);
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Customers and credit collection
 // ---------------------------------------------------------------------------

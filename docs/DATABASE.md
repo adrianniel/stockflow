@@ -500,10 +500,18 @@ A single sale can contain multiple products and multiple stock batches.
 | voided_at      | timestamp | Set when cancelled     |
 | voided_by      | uuid      | Owner who cancelled it |
 | void_reason    | text      | Why it was cancelled   |
+| replaces_sale_id | uuid    | Original sale replaced by this amendment |
 | created_at     | timestamp | Creation date          |
 
 A live sale has `voided_at IS NULL`. That predicate is what every report filters
 on, so it is the single fact that decides whether a sale counts.
+
+An amended sale is a new row. Its `replaces_sale_id` points to the voided row it
+replaces; later amendments point to the preceding replacement, forming an
+auditable chain. The replacement preserves the original `sale_date`, while its
+`created_at` records when the correction was entered. Original payment rows are
+kept and marked voided; the replacement receives new ledger rows. Refunds and
+overpayment handling are not part of MVP.
 
 ---
 

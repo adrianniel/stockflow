@@ -314,9 +314,16 @@ Requirements:
 - Every report excludes voided sales: daily and monthly totals, profit,
   collections, top products, and customer credit balances.
 
-Editing a recorded sale is not part of this: a correction is a void followed by
-recording the sale again, which keeps both the original and the replacement in
-the history.
+Editing a recorded sale is implemented as an amendment: the original is voided
+and a replacement sale is recorded in one transaction. The replacement links
+to the original, which keeps both rows, their batch history and their payment
+history auditable. Only the shop owner may amend a sale. The replacement keeps
+the original sale date so historical sales and profit reports stay on the day
+of the transaction.
+
+The payment ledger limitation remains: original payments are marked voided and
+the replacement starts a new payment history. Refunds and overpayment handling
+are outside MVP.
 
 ---
 

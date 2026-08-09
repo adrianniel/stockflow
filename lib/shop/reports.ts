@@ -122,6 +122,7 @@ export type DaySale = {
   paymentStatus: PaymentStatus;
   sellerName: string | null;
   customerName: string | null;
+  replacesSaleId: string | null;
 };
 
 export type DayCollection = {
@@ -523,6 +524,7 @@ type DaySaleRow = {
   amount_paid: string;
   payment_status: PaymentStatus;
   sale_date: string | null;
+  replaces_sale_id: string | null;
   users: { name: string | null } | { name: string | null }[] | null;
   customers: { name: string } | { name: string }[] | null;
   sale_items: Array<{ quantity: number }> | null;
@@ -587,6 +589,7 @@ export async function getDayDetail(
         amount_paid,
         payment_status,
         sale_date,
+        replaces_sale_id,
         users!sales_sold_by_fkey ( name ),
         customers ( name ),
         sale_items ( quantity )
@@ -640,6 +643,7 @@ export async function getDayDetail(
     return {
       id: row.id,
       saleDate: row.sale_date,
+      replacesSaleId: row.replaces_sale_id,
       total,
       // Same derivation as SalesSummary.totalCost: profit is already stored
       // against the batch price actually paid.

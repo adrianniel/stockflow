@@ -9,7 +9,12 @@ import { Panel, PanelHeader } from "@/components/ui/panel";
 import { requireRole } from "@/lib/auth/guards";
 import { getDashboardIdentity } from "@/lib/dashboard/identity";
 import { shopContextFor } from "@/lib/shop/context";
-import { getSale, listSaleItems, listSalePayments } from "@/lib/shop/queries";
+import {
+  getReplacementSale,
+  getSale,
+  listSaleItems,
+  listSalePayments,
+} from "@/lib/shop/queries";
 import type { SaleItem, SalePayment } from "@/lib/shop/types";
 import {
   formatCurrency,
@@ -46,9 +51,10 @@ export default async function SaleDetailPage({
     notFound();
   }
 
-  const [items, payments] = await Promise.all([
+  const [items, payments, replacement] = await Promise.all([
     listSaleItems(context, sale.id),
     listSalePayments(context, sale.id),
+    getReplacementSale(context, sale.id),
   ]);
 
   const voided = sale.voided_at !== null;
@@ -58,6 +64,7 @@ export default async function SaleDetailPage({
   // void_sale() both enforce the role independently — this just decides whether
   // the button is worth showing.
   const canVoid = profile.role === "OWNER" && !voided;
+  const canAmend = profile.role === "OWNER" && !voided && !replacement;
 
   const paymentColumns: Array<Column<SalePayment>> = [
     {
@@ -201,6 +208,30 @@ export default async function SaleDetailPage({
         </div>
       ) : null}
 
+      {sale.replaces_sale_id ? (
+        <div className="rounded-3xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
+          This sale replaces a previous recorded sale. The original remains in
+          history and is excluded from financial reports.
+          <div className="mt-2">
+            <ButtonLink href={`/dashboard/sales/${sale.replaces_sale_id}`} variant="secondary">
+              View original sale
+            </ButtonLink>
+          </div>
+        </div>
+      ) : null}
+
+      {replacement ? (
+        <div className="rounded-3xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
+          This sale has been amended. It remains in history but is excluded from
+          financial reports.
+          <div className="mt-2">
+            <ButtonLink href={`/dashboard/sales/${replacement.id}`} variant="secondary">
+              View replacement sale
+            </ButtonLink>
+          </div>
+        </div>
+      ) : null}
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard
           label="Total"
@@ -254,6 +285,11 @@ export default async function SaleDetailPage({
                     sale.sale_date,
                   )}`}
                 />
+              ) : null}
+              {canAmend ? (
+                <ButtonLink href={`/dashboard/sales/${sale.id}/amend`} variant="secondary">
+                  Amend sale
+                </ButtonLink>
               ) : null}
               <ButtonLink href="/dashboard/sales" variant="secondary">
                 Back to sales

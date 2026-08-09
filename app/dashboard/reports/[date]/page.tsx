@@ -75,15 +75,22 @@ export default async function DayDetailPage({
         // is hidden. The customer rides along underneath for the same reason —
         // its own column is gone at that width, and "who bought this" is the
         // one thing you cannot identify a row without.
-        <Link
-          href={`/dashboard/sales/${row.id}`}
-          className="block font-medium text-slate-950 hover:underline"
-        >
-          {formatTime(row.saleDate)}
-          <span className="block text-xs font-normal text-slate-500 md:hidden">
-            {row.customerName ?? "Walk-in"}
-          </span>
-        </Link>
+        <div>
+          <Link
+            href={`/dashboard/sales/${row.id}`}
+            className="block font-medium text-slate-950 hover:underline"
+          >
+            {formatTime(row.saleDate)}
+            <span className="block text-xs font-normal text-slate-500 md:hidden">
+              {row.customerName ?? "Walk-in"}
+            </span>
+          </Link>
+          {row.replacesSaleId ? (
+            <span className="mt-1 block text-xs font-semibold uppercase tracking-[0.14em] text-amber-600">
+              Replacement
+            </span>
+          ) : null}
+        </div>
       ),
     },
     {

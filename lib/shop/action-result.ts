@@ -13,7 +13,7 @@
 
 export type ActionState =
   | { status: "idle" }
-  | { status: "success"; message: string }
+  | { status: "success"; message: string; data?: string }
   | {
       status: "error";
       message: string;
@@ -23,8 +23,10 @@ export type ActionState =
 
 export const IDLE: ActionState = { status: "idle" };
 
-export function success(message: string): ActionState {
-  return { status: "success", message };
+export function success(message: string, data?: string): ActionState {
+  return data === undefined
+    ? { status: "success", message }
+    : { status: "success", message, data };
 }
 
 export function failure(

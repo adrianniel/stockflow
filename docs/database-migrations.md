@@ -1208,6 +1208,33 @@ Supports:
 
 ---
 
+# Migration 024 — Amend Recorded Sales
+
+File: `20260801121600_amend_sales.sql`
+
+## Purpose
+
+A correction must not overwrite a recorded sale. It preserves the original row
+and creates a linked replacement.
+
+## Changes Implemented
+
+- Added `sales.replaces_sale_id`, with one direct replacement per original.
+- Added a trigger that validates same-shop, voided-original links and keeps
+  established links immutable.
+- Added owner-only `amend_sale()` as a single transaction.
+- The function voids the original, restores its exact batches, writes the
+  existing stock-adjustment history, voids its payment rows, records the new
+  sale, and links it to the original.
+- The replacement keeps the original `sale_date`.
+
+The original and replacement are both retained. Reports filter on
+`voided_at IS NULL`, so only the active replacement contributes to totals.
+Refunds and overpayment handling remain outside MVP; old payment rows are
+voided and replacement payments are new ledger rows.
+
+---
+
 # Future Migration Guidelines
 
 All future database changes must:

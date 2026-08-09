@@ -322,6 +322,45 @@ checks AS (
         ),
         'apply 20260801121500 — voiding a sale fails with PGRST202 (function not found)'
 
+    UNION ALL SELECT
+        'column: sales.replaces_sale_id (20260801121600)',
+        EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'sales'
+              AND column_name = 'replaces_sale_id'
+        ),
+        'apply 20260801121600 — amended sales cannot link back to the original'
+
+    UNION ALL SELECT
+        'function: amend_sale exists (20260801121600)',
+        EXISTS (
+            SELECT 1 FROM pg_proc p
+            JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = 'public' AND p.proname = 'amend_sale'
+        ),
+        'apply 20260801121600 — amending a sale fails with PGRST202 (function not found)'
+
+    UNION ALL SELECT
+        'index: one replacement per original sale (20260801121600)',
+        EXISTS (
+            SELECT 1 FROM pg_indexes
+            WHERE schemaname = 'public'
+              AND tablename = 'sales'
+              AND indexname = 'sales_one_replacement_per_sale'
+        ),
+        'apply 20260801121600 — one original sale could be amended more than once'
+
+    UNION ALL SELECT
+        'trigger: replacement links stay within the shop (20260801121600)',
+        EXISTS (
+            SELECT 1 FROM pg_trigger
+            WHERE tgrelid = 'public.sales'::regclass
+              AND tgname = 'validate_sale_replacement_link'
+              AND NOT tgisinternal
+        ),
+        'apply 20260801121600 — a replacement link could point at another shop''s sale'
+
     -- The app spells its seller embed `users!sales_sold_by_fkey`, because
     -- sales now has two foreign keys to users and a bare `users ( name )` is
     -- ambiguous. If this constraint were ever recreated under a generated name,

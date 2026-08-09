@@ -243,6 +243,7 @@ type InventoryBatchRow = {
  */
 export async function listInventory(
   context: ShopContext,
+  { includeEmptyBatches = false }: { includeEmptyBatches?: boolean } = {},
 ): Promise<InventoryLine[]> {
   const { supabase, shopId } = context;
 
@@ -289,6 +290,7 @@ export async function listInventory(
     // one a sale would consume first.
     const productBatches = byProduct.get(product.id) ?? [];
     const inStock = productBatches.filter((b) => b.quantity_remaining > 0);
+    const displayedBatches = includeEmptyBatches ? productBatches : inStock;
 
     const quantityOnHand = inStock.reduce(
       (total, batch) => total + batch.quantity_remaining,
@@ -314,7 +316,7 @@ export async function listInventory(
         : null,
       // Still in FIFO order, so the till can pre-select `batches[0]` and get
       // the same batch record_sale() would have chosen on its own.
-      batches: inStock.map((batch) => ({
+      batches: displayedBatches.map((batch) => ({
         id: batch.id,
         batchNumber: batch.batch_number,
         receivedDate: batch.received_date,
@@ -347,6 +349,7 @@ type SaleRow = {
   sale_date: string | null;
   sold_by: string | null;
   customer_id: string | null;
+  replaces_sale_id: string | null;
   voided_at: string | null;
   void_reason: string | null;
   users: Embedded<{ name: string | null }>;
@@ -364,6 +367,7 @@ const SALE_SELECT = `
   sale_date,
   sold_by,
   customer_id,
+  replaces_sale_id,
   voided_at,
   void_reason,
   users!sales_sold_by_fkey ( name ),
@@ -382,6 +386,7 @@ function toSaleWithSeller(row: SaleRow): SaleWithSeller {
     sale_date: row.sale_date,
     sold_by: row.sold_by,
     customer_id: row.customer_id,
+    replaces_sale_id: row.replaces_sale_id,
     voided_at: row.voided_at,
     void_reason: row.void_reason,
     seller_name: one(row.users)?.name ?? null,
@@ -437,8 +442,28 @@ export async function getSale(
   return data ? toSaleWithSeller(data as SaleRow) : null;
 }
 
+/** Returns the direct replacement, if this sale has already been amended. */
+export async function getReplacementSale(
+  { supabase, shopId }: ShopContext,
+  originalSaleId: string,
+): Promise<SaleWithSeller | null> {
+  const { data, error } = await supabase
+    .from("sales")
+    .select(SALE_SELECT)
+    .eq("shop_id", shopId)
+    .eq("replaces_sale_id", originalSaleId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ? toSaleWithSeller(data as SaleRow) : null;
+}
+
 type SaleItemRow = {
   id: string;
+  product_id: string | null;
   quantity: number;
   capital_price: string;
   suggested_price: string;
@@ -446,8 +471,11 @@ type SaleItemRow = {
   profit: string;
   stock_batch_id: string | null;
   stock_batches: Embedded<{
+    product_id: string;
     batch_number: string;
     received_date: string | null;
+    quantity_remaining: number;
+    selling_price: string;
     products: Embedded<{ product_name: string }>;
   }>;
 };
@@ -468,17 +496,13 @@ export async function listSaleItems(
     .select(
       `
       id,
+      stock_batches ( product_id, batch_number, received_date, quantity_remaining, selling_price, products ( product_name ) ),
       quantity,
       capital_price,
       suggested_price,
       actual_selling_price,
       profit,
-      stock_batch_id,
-      stock_batches (
-        batch_number,
-        received_date,
-        products ( product_name )
-      )
+      stock_batch_id
     `,
     )
     .eq("sale_id", saleId)
@@ -493,6 +517,7 @@ export async function listSaleItems(
 
     return {
       id: row.id,
+      product_id: batch?.product_id ?? null,
       quantity: row.quantity,
       capital_price: row.capital_price,
       suggested_price: row.suggested_price,
@@ -502,6 +527,8 @@ export async function listSaleItems(
       batch_number: batch?.batch_number ?? null,
       batch_received_date: batch?.received_date ?? null,
       product_name: one(batch?.products ?? null)?.product_name ?? null,
+      batch_quantity_remaining: batch?.quantity_remaining ?? null,
+      batch_selling_price: batch?.selling_price ?? null,
     };
   });
 }

@@ -10,7 +10,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Field, Input, Select } from "@/components/ui/field";
 import { FormAlert, SubmitButton, fieldError } from "@/components/ui/form-status";
 import { Panel, PanelHeader } from "@/components/ui/panel";
-import { IDLE } from "@/lib/shop/action-result";
+import { IDLE, type ActionState } from "@/lib/shop/action-result";
 import { recordSale } from "@/lib/shop/actions";
 import type {
   CartLine,
@@ -46,12 +46,26 @@ import { formatCurrency, formatDateKey } from "@/lib/utils/format";
 export function SaleComposer({
   products,
   customers,
+  initialLines = [],
+  initialCustomerId = "",
+  initialPaymentStatus = "PAID",
+  initialAmountPaid,
+  action = recordSale,
+  mode = "new",
+  originalSaleId,
 }: {
   products: InventoryLine[];
   customers: Customer[];
+  initialLines?: CartLine[];
+  initialCustomerId?: string;
+  initialPaymentStatus?: PaymentStatus;
+  initialAmountPaid?: string | number;
+  action?: (previous: ActionState, form: FormData) => Promise<ActionState>;
+  mode?: "new" | "amend";
+  originalSaleId?: string;
 }) {
   const router = useRouter();
-  const [lines, setLines] = useState<CartLine[]>([]);
+  const [lines, setLines] = useState<CartLine[]>(initialLines);
   const [search, setSearch] = useState("");
   /**
    * The product whose batches are on screen, or null when none is being picked.
@@ -62,9 +76,10 @@ export function SaleComposer({
   const [pendingProduct, setPendingProduct] = useState<InventoryLine | null>(
     null,
   );
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("PAID");
-  const [customerId, setCustomerId] = useState("");
-  const [state, formAction] = useActionState(recordSale, IDLE);
+  const [paymentStatus, setPaymentStatus] =
+    useState<PaymentStatus>(initialPaymentStatus);
+  const [customerId, setCustomerId] = useState(initialCustomerId);
+  const [state, formAction] = useActionState(action, IDLE);
 
   // Cleared after a successful sale so the next customer starts fresh.
   //
@@ -79,6 +94,10 @@ export function SaleComposer({
     setHandledState(state);
 
     if (state.status === "success") {
+      if (mode === "amend" && state.data) {
+        router.push(`/dashboard/sales/${state.data}`);
+      }
+
       setLines([]);
       setSearch("");
       setPendingProduct(null);
@@ -93,7 +112,7 @@ export function SaleComposer({
     if (state.status === "success") {
       router.refresh();
     }
-  }, [state, router]);
+  }, [state, router, mode]);
 
   const matches = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -185,6 +204,9 @@ export function SaleComposer({
 
   return (
     <form action={formAction} className="flex flex-col gap-6">
+      {mode === "amend" && originalSaleId ? (
+        <input type="hidden" name="sale_id" value={originalSaleId} />
+      ) : null}
       {/* The cart travels as one JSON field: its length varies, and the server
           parses and re-validates every entry regardless of what arrives. */}
       <input type="hidden" name="items" value={JSON.stringify(lines)} />
@@ -194,6 +216,34 @@ export function SaleComposer({
           to a settled sale. */}
       {paymentStatus !== "PAID" ? (
         <input type="hidden" name="customer_id" value={customerId} />
+      ) : null}
+
+      {mode === "amend" ? (
+        <Panel>
+          <PanelHeader
+            title="Amend recorded sale"
+            description="Saving will void the original sale and create this replacement atomically. The original remains in history."
+          />
+          <Field
+            label="Amendment reason"
+            htmlFor="amendment-reason"
+            error={fieldError(state, "amendment_reason")}
+            hint="Required for the audit trail."
+          >
+            <Input
+              id="amendment-reason"
+              name="amendment_reason"
+              maxLength={300}
+              placeholder="e.g. corrected quantity"
+              required
+            />
+          </Field>
+          <p className="mt-3 text-xs text-amber-700">
+            Existing payments will remain on the original as voided history.
+            The replacement starts a new payment entry; refunds and
+            overpayments are not handled here.
+          </p>
+        </Panel>
       ) : null}
 
       <Panel>
@@ -300,6 +350,7 @@ export function SaleComposer({
                   step="0.01"
                   inputMode="decimal"
                   placeholder="0.00"
+                  defaultValue={initialAmountPaid}
                   required
                 />
               </Field>
@@ -350,6 +401,7 @@ export function SaleComposer({
 
             <SaleSubmit
               disabled={!hasLines || (paymentStatus !== "PAID" && customerId === "")}
+              label={mode === "amend" ? "Save amendment" : "Record sale"}
             />
           </div>
         </div>
@@ -364,16 +416,26 @@ export function SaleComposer({
  * SubmitButton disables itself while pending; this adds "and also when the cart
  * is empty", which the button itself has no way to know.
  */
-function SaleSubmit({ disabled }: { disabled: boolean }) {
+function SaleSubmit({
+  disabled,
+  label,
+}: {
+  disabled: boolean;
+  label: string;
+}) {
   if (disabled) {
     return (
       <Button type="button" disabled>
-        Record sale
+        {label}
       </Button>
     );
   }
 
-  return <SubmitButton pendingLabel="Recording...">Record sale</SubmitButton>;
+  return (
+    <SubmitButton pendingLabel={label === "Record sale" ? "Recording..." : "Saving..."}>
+      {label}
+    </SubmitButton>
+  );
 }
 
 function ProductSearch({

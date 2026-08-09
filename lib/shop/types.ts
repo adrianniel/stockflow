@@ -85,6 +85,7 @@ export type Sale = {
   sale_date: string | null;
   sold_by: string | null;
   customer_id: string | null;
+  replaces_sale_id: string | null;
   /**
    * Set once the sale has been cancelled. A voided sale keeps its row, its
    * line items and its payment history, but counts for nothing: it is out of
@@ -108,6 +109,7 @@ export type SaleWithSeller = Sale & {
 
 export type SaleItem = {
   id: string;
+  product_id: string | null;
   quantity: number;
   capital_price: string;
   suggested_price: string;
@@ -118,6 +120,8 @@ export type SaleItem = {
   batch_number: string | null;
   /** Shown beside the reference, which is free-form and may repeat. */
   batch_received_date: string | null;
+  batch_quantity_remaining: number | null;
+  batch_selling_price: string | null;
 };
 
 export type StockAdjustment = {

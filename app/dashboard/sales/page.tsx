@@ -60,6 +60,11 @@ export default async function SalesPage() {
               Voided
             </p>
           ) : null}
+          {sale.replaces_sale_id ? (
+            <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-amber-600">
+              Replacement sale
+            </p>
+          ) : null}
         </div>
       ),
     },
