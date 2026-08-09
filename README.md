@@ -1,36 +1,185 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# StockFlow
 
-## Getting Started
+StockFlow is a multi-tenant inventory, sales, payment, and profit management
+system for small businesses. It is designed for shops that need reliable
+batch-level stock tracking, accurate sales history, and clear daily reporting.
 
-First, run the development server:
+Each shop operates in an isolated workspace. Products, inventory, sales,
+payments, customers, and reports are scoped to the authenticated shop.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Core capabilities
+
+- Product and category management
+- Batch-based inventory receiving
+- Historical batch references and pricing
+- FIFO inventory deduction with explicit batch selection
+- Stock adjustments with audit reasons
+- Sales recording with manual price adjustments
+- Credit sales and partial payments
+- Payment received-date tracking
+- Sale voiding with stock restoration
+- Sale amendments through an auditable replacement-sale workflow
+- Daily, weekly, monthly, and custom on-screen reports
+- Dynamic daily, weekly, and monthly PDF report exports
+- Inventory search, category filtering, stock-status filtering, and sorting
+- Sold-out batch history protection
+- Owner and assistant role-based access
+
+## Technology stack
+
+- Next.js 16 App Router
+- React 19 and TypeScript
+- Tailwind CSS
+- Supabase PostgreSQL
+- Supabase Auth and Row Level Security (RLS)
+- Vercel-compatible server runtime
+- PDFKit for dynamic in-memory PDF generation
+
+## User roles
+
+### SUPER_ADMIN
+
+Manages shops and platform accounts. Business inventory, sales, and financial
+records remain protected from platform-wide access unless the account is also
+authorized for that shop.
+
+### OWNER
+
+Manages the shop, products, categories, inventory, assistants, sales, reports,
+voids, and sale amendments.
+
+### ASSISTANT
+
+Can view inventory and reports, receive stock, record sales, choose batches,
+and collect payments. Assistants cannot void or amend recorded sales or manage
+shop ownership.
+
+## Local setup
+
+### Requirements
+
+- Node.js compatible with the project’s Next.js version
+- npm
+- A Supabase project
+
+### Environment variables
+
+Create `.env.local` in the project root:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-anon-key
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Only the publishable/anon key belongs in this application. Never add or expose
+a Supabase `service_role` key. StockFlow relies on authenticated access and RLS
+for tenant isolation.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Install and run
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm install
+npm run dev
+```
 
-## Learn More
+Open [http://localhost:3000](http://localhost:3000).
 
-To learn more about Next.js, take a look at the following resources:
+## Database setup
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The complete database definition and migration history are in
+[`supabase/migrations/`](supabase/migrations/).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Apply the migrations in filename order, from the baseline schema through the
+latest batch-lifecycle protection migration. The current migration chain
+includes:
 
-## Deploy on Vercel
+- Core schema, indexes, RLS, and helper functions
+- Inventory and FIFO sale recording
+- Payment ledger and derived payment status
+- Explicit batch selection
+- Sale voiding and stock restoration
+- Sale amendment and replacement links
+- Credit payment received-date validation
+- Batch deletion and historical-product deletion protection
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+After applying migrations, run [`docs/verify-setup.sql`](docs/verify-setup.sql)
+in the Supabase SQL editor. Every verification row should return `PASS`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See [`docs/SETUP.md`](docs/SETUP.md) for the full setup and deployment
+procedure.
+
+## Important business rules
+
+- Inventory is batch-based; old purchase prices are never overwritten.
+- FIFO is the default fallback when no batch is explicitly selected.
+- Sales are voided, not deleted.
+- Amendments void the original sale and create a linked replacement sale.
+- Sale revenue uses the original sale date.
+- Collections use the actual payment received date.
+- `amount_paid` and `payment_status` are derived from the payment ledger.
+- Sold-out batches remain available as historical records.
+- Products with stock-batch history cannot be deleted.
+- Reports exclude voided sales and voided payments.
+- Refunds and overpayment handling are outside the current MVP scope.
+
+## Reports and PDF export
+
+On-screen reports support daily, weekly, monthly, and custom date ranges.
+
+PDF export is generated dynamically for:
+
+- Today or a selected daily report
+- The current week
+- The current month
+
+Generated PDFs are returned directly to the browser. They are not saved in
+Supabase Storage, a reports table, or permanent application files.
+
+## Verification
+
+Run the complete project verification before committing or deploying:
+
+```bash
+npm run verify
+```
+
+This runs:
+
+1. TypeScript type checking
+2. ESLint
+3. Next.js production build
+
+StockFlow currently has no automated application test suite. Database
+verification and end-to-end business workflows should also be tested manually,
+especially FIFO, voiding, amendments, payment dates, RLS isolation, and PDF
+export.
+
+## Deployment
+
+StockFlow is designed for Vercel and Supabase:
+
+1. Apply and verify all Supabase migrations.
+2. Configure the two public environment variables in Vercel.
+3. Set the production Supabase authentication site URL and redirect URL.
+4. Run `npm run verify` locally.
+5. Test the production deployment with owner, assistant, and cross-shop flows.
+
+Do not deploy until the database verification script passes and the critical
+sales, inventory, payment, and reporting workflows have been tested.
+
+## Project documentation
+
+- [`docs/SRS.md`](docs/SRS.md) — functional requirements and business rules
+- [`docs/DATABASE.md`](docs/DATABASE.md) — database design and data rules
+- [`docs/database-migrations.md`](docs/database-migrations.md) — migration history
+- [`docs/SETUP.md`](docs/SETUP.md) — Supabase setup and deployment instructions
+- [`docs/verify-setup.sql`](docs/verify-setup.sql) — database verification checks
+- [`AGENTS.md`](AGENTS.md) — development and architecture rules
+
+## Known limitations
+
+- Refund and overpayment workflows are not included.
+- Custom date-range PDF export is not included.
+- Inventory filtering is currently client-side after the shop inventory is loaded.
+- There is no in-app password reset flow yet.
+- Expense management is planned for a future release.
