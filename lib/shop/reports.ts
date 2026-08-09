@@ -1,4 +1,5 @@
 import { toNumber } from "@/lib/utils/format";
+import { LOW_STOCK_THRESHOLD } from "./inventory-status";
 
 import type { ShopContext } from "./context";
 import {
@@ -140,9 +141,6 @@ export type DayCollection = {
    */
   fromEarlierSale: boolean;
 };
-
-/** A product at or below this many units is flagged as low stock. */
-const LOW_STOCK_THRESHOLD = 5;
 
 const EMPTY_SUMMARY: SalesSummary = {
   saleCount: 0,

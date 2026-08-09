@@ -10,6 +10,7 @@ import { getDashboardIdentity } from "@/lib/dashboard/identity";
 import { shopContextFor } from "@/lib/shop/context";
 import { listInventory, listSales } from "@/lib/shop/queries";
 import { getDashboardSummary } from "@/lib/shop/reports";
+import { LOW_STOCK_THRESHOLD } from "@/lib/shop/inventory-status";
 import type { InventoryLine, SaleWithSeller } from "@/lib/shop/types";
 import {
   formatCurrency,
@@ -18,9 +19,6 @@ import {
 } from "@/lib/utils/format";
 
 export const metadata = { title: "Dashboard" };
-
-/** Matches LOW_STOCK_THRESHOLD in lib/shop/reports.ts. */
-const LOW_STOCK_THRESHOLD = 5;
 
 /**
  * Assistant home (SRS 5.3).
