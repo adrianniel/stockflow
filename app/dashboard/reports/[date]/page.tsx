@@ -278,9 +278,17 @@ export default async function DayDetailPage({
           title="Sales made on this day"
           description="Revenue, cost and profit above come from these sales only. They are fixed once recorded — collecting an old debt does not change them."
           actions={
-            <ButtonLink href="/dashboard/reports" variant="secondary">
-              Back to reports
-            </ButtonLink>
+            <div className="flex flex-wrap gap-2">
+              <ButtonLink
+                href={`/api/reports/sales-export?period=daily&date=${detail.date}`}
+                variant="secondary"
+              >
+                Export daily PDF
+              </ButtonLink>
+              <ButtonLink href="/dashboard/reports" variant="secondary">
+                Back to reports
+              </ButtonLink>
+            </div>
           }
         />
 

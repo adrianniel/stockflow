@@ -1207,6 +1207,7 @@ Supports:
   the sale kept in the history
 - Credit and partial payment ledger entries dated by actual collection time,
   with entry timestamps preserved separately
+- Dynamic daily, weekly and monthly PDF report export without persisted files
 
 ---
 

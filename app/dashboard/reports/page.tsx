@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
+import { ButtonLink } from "@/components/ui/button";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Panel, PanelHeader } from "@/components/ui/panel";
 import { requireRole } from "@/lib/auth/guards";
@@ -154,6 +155,30 @@ export default async function ReportsPage({
           most recent {MAX_RANGE_DAYS} instead, so the totals stay accurate.
         </p>
       ) : null}
+
+      <div className="flex flex-wrap justify-end gap-2">
+        <ButtonLink
+          href="/api/reports/sales-export?period=daily"
+          variant="secondary"
+          size="sm"
+        >
+          Export today PDF
+        </ButtonLink>
+        <ButtonLink
+          href="/api/reports/sales-export?period=week"
+          variant="secondary"
+          size="sm"
+        >
+          Export week PDF
+        </ButtonLink>
+        <ButtonLink
+          href="/api/reports/sales-export?period=month"
+          variant="secondary"
+          size="sm"
+        >
+          Export month PDF
+        </ButtonLink>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard label={rangeLabel} summary={report.total} highlight />

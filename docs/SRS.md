@@ -458,6 +458,18 @@ Displays:
 - Weekly profit
 - Monthly profit
 
+## Sales Report Export
+
+Owners and assistants may export lightweight PDF reports dynamically for:
+
+- Today or a selected daily report
+- The current week
+- The current month
+
+Generated PDFs are returned to the browser and are not stored in the database
+or Supabase Storage. Sales use their sale date, while collections use each
+payment's collected date. Voided sales and payments are excluded from totals.
+
 ---
 
 # 13. Stock Adjustment
