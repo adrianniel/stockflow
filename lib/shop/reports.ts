@@ -358,7 +358,7 @@ async function loadExpenses(
 ): Promise<ExpenseAggregateRow[]> {
   const { data, error } = await supabase
     .from("expenses")
-    .select("id, expense_date, name, amount, notes, users ( name )")
+    .select("id, expense_date, name, amount, notes, users!expenses_created_by_fkey ( name )")
     .eq("shop_id", shopId)
     .gte("expense_date", dateKey(from))
     .lt("expense_date", dateKey(to))
@@ -702,7 +702,7 @@ export async function getDayDetail(
       .limit(ROW_CEILING),
     supabase
       .from("expenses")
-      .select("id, expense_date, name, amount, notes, users ( name )")
+      .select("id, expense_date, name, amount, notes, users!expenses_created_by_fkey ( name )")
       .eq("shop_id", shopId)
       .eq("expense_date", key)
       .is("deleted_at", null)

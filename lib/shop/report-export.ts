@@ -211,7 +211,7 @@ export async function getSalesExportData(
       .order("collected_at", { ascending: false }),
     supabase
       .from("expenses")
-      .select("id, expense_date, name, amount, notes, users ( name )")
+      .select("id, expense_date, name, amount, notes, users!expenses_created_by_fkey ( name )")
       .eq("shop_id", shopId)
       .gte("expense_date", range.fromKey)
       .lte("expense_date", range.toKey)

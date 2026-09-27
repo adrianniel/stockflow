@@ -24,7 +24,7 @@ export async function listExpenses(
   let query = supabase
     .from("expenses")
     .select(
-      `id, expense_date, name, amount, notes, created_by, created_at, updated_at, users ( name )`,
+      `id, expense_date, name, amount, notes, created_by, created_at, updated_at, users!expenses_created_by_fkey ( name )`,
     )
     .eq("shop_id", shopId)
     .is("deleted_at", null)
