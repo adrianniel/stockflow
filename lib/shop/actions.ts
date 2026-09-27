@@ -428,12 +428,17 @@ function validPastOrTodayDate(value: string): boolean {
     return false;
   }
 
-  const today = new Date();
-  const todayKey = [
-    today.getFullYear(),
-    String(today.getMonth() + 1).padStart(2, "0"),
-    String(today.getDate()).padStart(2, "0"),
-  ].join("-");
+  // Expense dates are business calendar days. The app targets Philippine shops,
+  // so use the shop's calendar timezone rather than the server's UTC date. This
+  // prevents a valid local "Today" selection from being rejected shortly after
+  // midnight when the server is still on the previous UTC day.
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const todayKey = `${parts.find((part) => part.type === "year")?.value}-${parts.find((part) => part.type === "month")?.value}-${parts.find((part) => part.type === "day")?.value}`;
 
   return value <= todayKey;
 }
