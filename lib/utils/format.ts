@@ -19,13 +19,17 @@ const decimal = new Intl.NumberFormat("en-PH", {
   maximumFractionDigits: 2,
 });
 
+const SHOP_TIME_ZONE = "Asia/Manila";
+
 const dateOnly = new Intl.DateTimeFormat("en-PH", {
+  timeZone: SHOP_TIME_ZONE,
   year: "numeric",
   month: "short",
   day: "numeric",
 });
 
 const dateAndTime = new Intl.DateTimeFormat("en-PH", {
+  timeZone: SHOP_TIME_ZONE,
   year: "numeric",
   month: "short",
   day: "numeric",
@@ -34,6 +38,7 @@ const dateAndTime = new Intl.DateTimeFormat("en-PH", {
 });
 
 const timeOnly = new Intl.DateTimeFormat("en-PH", {
+  timeZone: SHOP_TIME_ZONE,
   hour: "numeric",
   minute: "2-digit",
 });
@@ -115,7 +120,7 @@ export function formatDateKey(value: string | null | undefined) {
   }
 
   return dateOnly.format(
-    new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])),
+    new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12)),
   );
 }
 
