@@ -174,7 +174,6 @@ StockFlow MVP includes:
 6. sales
 7. sale_items
 8. stock_adjustments
-9. expenses
 
 ---
 
@@ -627,38 +626,6 @@ Examples:
 | reason          | text      | Explanation               |
 | adjusted_by     | uuid      | User responsible          |
 | created_at      | timestamp | Creation date             |
-
----
-
-# 5.9 expenses Table
-
-## Purpose
-
-Stores operating expenses recorded by a shop. Expenses use a calendar date so
-a past cost can be entered without changing the date of a sale.
-
-## Fields
-
-| Field        | Type      | Description           |
-| ------------ | --------- | --------------------- |
-| id           | uuid      | Primary key           |
-| shop_id      | uuid      | Owner shop            |
-| expense_date | date      | Day the cost occurred |
-| name         | text      | Expense description   |
-| amount       | decimal   | Positive amount       |
-| notes        | text      | Optional details      |
-| created_by   | uuid      | User who recorded it  |
-| created_at   | timestamp | Creation date         |
-| updated_at   | timestamp | Last update           |
-| deleted_at   | timestamp | Soft-delete timestamp |
-| deleted_by   | uuid      | User who deleted it   |
-
-Only active expenses (`deleted_at IS NULL`) reduce net profit. Both OWNER and
-ASSISTANT users may record, edit, and soft-delete expenses in their own shop.
-
-```
-Net profit = Sales profit - Active expenses
-```
 
 ---
 

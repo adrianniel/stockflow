@@ -2,7 +2,6 @@ import PDFDocument from "pdfkit/js/pdfkit.standalone";
 
 import type {
   ExportCollection,
-  ExportExpense,
   ExportSale,
   SalesExportData,
 } from "@/lib/shop/report-export";
@@ -33,23 +32,12 @@ export async function renderSalesReportPdf(
   cursor.section("Sales summary");
   cursor.summaryRow("Total revenue", money(data.totalRevenue));
   cursor.summaryRow("Total cost", money(data.totalCost));
-  cursor.summaryRow("Sales profit", money(data.totalProfit + data.totalExpenses));
-  cursor.summaryRow("Expenses", money(data.totalExpenses));
-  cursor.summaryRow("Net profit", money(data.totalProfit));
+  cursor.summaryRow("Gross profit", money(data.totalProfit));
   cursor.summaryRow("Transactions", String(data.sales.length));
 
   cursor.section("Sales details");
   for (const sale of data.sales) {
     cursor.sale(sale);
-  }
-
-  cursor.section("Expenses");
-  if (data.expenses.length === 0) {
-    cursor.muted("No expenses in this period.");
-  } else {
-    for (const expense of data.expenses) {
-      cursor.expense(expense);
-    }
   }
 
   cursor.section("Product summary");
@@ -224,17 +212,6 @@ class Cursor {
       this.doc.fillColor("#b45309").text("Earlier sale payment");
     }
     this.doc.moveDown(0.25);
-  }
-
-  expense(expense: ExportExpense) {
-    this.ensure(34);
-    this.doc.fontSize(9).fillColor("#334155").text(
-      `${expense.date} · ${expense.name} · ${money(expense.amount)}`,
-    );
-    if (expense.notes) {
-      this.doc.text(`Note: ${expense.notes}`);
-    }
-    this.doc.moveDown(0.2);
   }
 
   muted(text: string) {

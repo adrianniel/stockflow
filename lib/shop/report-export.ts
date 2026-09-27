@@ -54,25 +54,14 @@ export type ExportCredit = {
   outstanding: number;
 };
 
-export type ExportExpense = {
-  id: string;
-  date: string;
-  name: string;
-  amount: number;
-  notes: string | null;
-  createdByName: string | null;
-};
-
 export type SalesExportData = {
   range: ExportRange;
   sales: ExportSale[];
   collections: ExportCollection[];
   credits: ExportCredit[];
-  expenses: ExportExpense[];
   totalRevenue: number;
   totalCost: number;
   totalProfit: number;
-  totalExpenses: number;
 };
 
 type Embedded<T> = T | T[] | null;
@@ -166,7 +155,7 @@ export async function getSalesExportData(
   { supabase, shopId }: ShopContext,
   range: ExportRange,
 ): Promise<SalesExportData> {
-  const [salesResult, paymentsResult, expensesResult] = await Promise.all([
+  const [salesResult, paymentsResult] = await Promise.all([
     supabase
       .from("sales")
       .select(
@@ -209,14 +198,6 @@ export async function getSalesExportData(
       .is("voided_at", null)
       .is("sales.voided_at", null)
       .order("collected_at", { ascending: false }),
-    supabase
-      .from("expenses")
-      .select("id, expense_date, name, amount, notes, users ( name )")
-      .eq("shop_id", shopId)
-      .gte("expense_date", range.fromKey)
-      .lte("expense_date", range.toKey)
-      .is("deleted_at", null)
-      .order("expense_date", { ascending: false }),
   ]);
 
   if (salesResult.error) {
@@ -225,10 +206,6 @@ export async function getSalesExportData(
 
   if (paymentsResult.error) {
     throw paymentsResult.error;
-  }
-
-  if (expensesResult.error) {
-    throw expensesResult.error;
   }
 
   const sales = ((salesResult.data ?? []) as SaleRow[]).map((row) => {
@@ -288,35 +265,15 @@ export async function getSalesExportData(
     }
   }
 
-  const expenses = ((expensesResult.data ?? []) as Array<{
-    id: string;
-    expense_date: string;
-    name: string;
-    amount: string;
-    notes: string | null;
-    users: Embedded<{ name: string | null }>;
-  }>).map((expense) => ({
-    id: expense.id,
-    date: expense.expense_date,
-    name: expense.name,
-    amount: toNumber(expense.amount),
-    notes: expense.notes,
-    createdByName: one(expense.users)?.name ?? null,
-  }));
-
-  const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
-
   return {
     range,
     sales,
     collections,
-    expenses,
     credits: [...credits.entries()]
       .map(([customerName, outstanding]) => ({ customerName, outstanding }))
       .sort((a, b) => b.outstanding - a.outstanding),
     totalRevenue: sales.reduce((sum, sale) => sum + sale.total, 0),
     totalCost: sales.reduce((sum, sale) => sum + (sale.total - sale.profit), 0),
-    totalProfit: sales.reduce((sum, sale) => sum + sale.profit, 0) - totalExpenses,
-    totalExpenses,
+    totalProfit: sales.reduce((sum, sale) => sum + sale.profit, 0),
   };
 }

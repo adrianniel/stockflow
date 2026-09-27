@@ -124,7 +124,7 @@ export default async function AssistantDashboard() {
           delta={`${summary.today.saleCount} sale(s)`}
         />
         <StatCard
-           label="Today's net profit"
+          label="Today's profit"
           value={formatCurrency(summary.today.totalProfit)}
           delta={`${summary.today.itemCount} unit(s) sold`}
         />

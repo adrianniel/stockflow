@@ -102,7 +102,6 @@ export function navigationForRole(role: UserRole): NavItem[] {
         { label: "Inventory", href: "/dashboard/inventory" },
         { label: "Sales", href: "/dashboard/sales" },
         { label: "Credit", href: "/dashboard/credit" },
-        { label: "Expenses", href: "/dashboard/expenses" },
         { label: "Adjustments", href: "/dashboard/adjustments" },
         { label: "Reports", href: "/dashboard/reports" },
         { label: "Assistants", href: "/dashboard/assistants" },
@@ -123,7 +122,6 @@ export function navigationForRole(role: UserRole): NavItem[] {
         { label: "Inventory", href: "/dashboard/inventory" },
         { label: "Sales", href: "/dashboard/sales" },
         { label: "Credit", href: "/dashboard/credit" },
-        { label: "Expenses", href: "/dashboard/expenses" },
         { label: "Reports", href: "/dashboard/reports" },
         { label: "Settings", href: "/dashboard/settings" },
       ];

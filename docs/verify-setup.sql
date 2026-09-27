@@ -80,19 +80,6 @@ required_columns(table_name, column_name, migration, consequence) AS (
         ('stock_adjustments','reason',               'baseline',     'apply 20260801120000 (baseline)'),
         ('stock_adjustments','created_at',           'baseline',     'apply 20260801120000 (baseline)'),
 
-        -- 20260801122100 — expenses
-        ('expenses',         'id',                   '20260801122100', 'Expenses page errors; expense records cannot be stored'),
-        ('expenses',         'shop_id',              '20260801122100', 'Expenses could not be isolated by shop'),
-        ('expenses',         'expense_date',         '20260801122100', 'Expenses cannot be assigned to their business day'),
-        ('expenses',         'name',                 '20260801122100', 'Expense name cannot be recorded'),
-        ('expenses',         'amount',               '20260801122100', 'Expense amount cannot be recorded'),
-        ('expenses',         'notes',                '20260801122100', 'Expense notes cannot be displayed'),
-        ('expenses',         'created_by',           '20260801122100', 'Expense recorder cannot be identified'),
-        ('expenses',         'created_at',           '20260801122100', 'Expense creation time is missing'),
-        ('expenses',         'updated_at',           '20260801122100', 'Expense edits cannot be timestamped'),
-        ('expenses',         'deleted_at',           '20260801122100', 'Expense soft deletion cannot work'),
-        ('expenses',         'deleted_by',           '20260801122100', 'Expense deletion history cannot identify its actor'),
-
         -- 20260801120200 — discounts and partial payments
         ('sales',            'amount_paid',          '20260801120200', 'OWNER dashboard, Sales, Reports error 42703; recording a sale fails'),
 
@@ -243,7 +230,7 @@ checks AS (
             WHERE schemaname = 'public'
               AND tablename IN (
                   'categories', 'products', 'stock_batches',
-                  'sales', 'sale_items', 'stock_adjustments', 'expenses'
+                  'sales', 'sale_items', 'stock_adjustments'
               )
               AND (qual ILIKE '%is_super_admin%' OR with_check ILIKE '%is_super_admin%')
         ),
@@ -466,15 +453,15 @@ checks AS (
     -- RLS is the whole security model; a table with it switched off is a leak
     -- between shops, not a missing feature.
     UNION ALL SELECT
-        'RLS enabled on all 11 tables',
+        'RLS enabled on all 10 tables',
         (
-            SELECT count(*) = 11
+            SELECT count(*) = 10
             FROM pg_tables
             WHERE schemaname = 'public'
               AND tablename IN (
                   'shops', 'users', 'categories', 'products',
-                   'stock_batches', 'sales', 'sale_items', 'stock_adjustments',
-                   'customers', 'sale_payments', 'expenses'
+                  'stock_batches', 'sales', 'sale_items', 'stock_adjustments',
+                  'customers', 'sale_payments'
               )
               AND rowsecurity
         ),

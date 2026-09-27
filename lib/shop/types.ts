@@ -136,18 +136,6 @@ export type StockAdjustment = {
   adjusted_by_name: string | null;
 };
 
-export type Expense = {
-  id: string;
-  expense_date: string;
-  name: string;
-  amount: string;
-  notes: string | null;
-  created_by: string | null;
-  created_at: string | null;
-  updated_at: string | null;
-  created_by_name: string | null;
-};
-
 /**
  * A named credit customer.
  *

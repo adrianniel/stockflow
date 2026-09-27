@@ -667,7 +667,6 @@ timestamp so they apply in order.
 | 021 | `20260801121300_batch_reference_not_unique.sql` | Batch reference is free-form, duplicates allowed |
 | 022 | `20260801121400_record_sale_explicit_batch.sql` | A sale line may name its batch; FIFO becomes the fallback |
 | 026 | `20260801121800_batch_lifecycle_protection.sql` | Protects sold-out batch history from deletion |
-| 027 | `20260801122100_expenses.sql` | Adds shop expenses with soft deletion and net-profit reporting |
 
 Each file carries its own reasoning in a header comment. The entries below cover
 the ones that changed security or business rules rather than schema shape.
@@ -1190,7 +1189,7 @@ StockFlow Database v1.3
 Status:
 
 ```
-COMPLETED — migrations 001-027 applied
+COMPLETED — migrations 001-026 applied
 ```
 
 Supports:
@@ -1282,21 +1281,6 @@ sold out. No existing rows are changed.
 
 ---
 
-# Migration 027 — Shop Expenses
-
-File: `20260801122100_expenses.sql`
-
-This additive migration creates the shop-owned `expenses` table, indexes it for
-shop/date reporting, and adds RLS for owners and assistants. It does not rewrite
-or delete existing products, inventory, sales, payments, customers, or stock
-adjustments.
-
-Expense deletion is implemented as a soft delete using `deleted_at` and
-`deleted_by`. Active expenses are subtracted from sales profit in dashboard,
-report, daily-detail, and PDF calculations to produce net profit.
-
----
-
 # Future Migration Guidelines
 
 All future database changes must:
@@ -1314,5 +1298,5 @@ All future database changes must:
 Current Version:
 
 ```
-StockFlow Database v1.4
+StockFlow Database v1.3
 ```

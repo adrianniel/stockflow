@@ -96,12 +96,6 @@ export default async function ReportsPage({
       align: "right",
       cell: (row) => <ProfitValue amount={row.summary.totalProfit} />,
     },
-    {
-      header: "Expenses",
-      align: "right",
-      hideOnMobile: true,
-      cell: (row) => formatCurrency(row.summary.totalExpenses),
-    },
   ];
 
   const productColumns: Array<
@@ -187,7 +181,7 @@ export default async function ReportsPage({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-         <SummaryCard label={rangeLabel} summary={report.total} highlight />
+        <SummaryCard label={rangeLabel} summary={report.total} highlight />
         <SummaryCard label="Today" summary={report.today} />
         <SummaryCard label="Last 7 days" summary={report.last7Days} />
         <SummaryCard label="This month" summary={report.thisMonth} />
@@ -196,7 +190,7 @@ export default async function ReportsPage({
       <Panel>
         <PanelHeader
           title="Daily breakdown"
-          description="Every day in the range, including days with no sales. Net profit is sales profit less recorded expenses; collected is the cash that came in — including payments on older credit. Tap a date for the full day."
+          description="Every day in the range, including days with no sales. Revenue and profit are what was sold that day; collected is the cash that came in — including payments on older credit. Tap a date for the full day."
         />
 
         <DataTable
@@ -257,7 +251,7 @@ function SummaryCard({
           : "rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur"
       }
     >
-           <p
+      <p
         className={
           highlight
             ? "text-sm font-medium text-slate-300"
@@ -275,7 +269,7 @@ function SummaryCard({
               : "text-xs font-semibold uppercase tracking-[0.16em] text-slate-500"
           }
         >
-           Revenue
+          Revenue
         </p>
         <p
           className={
@@ -299,12 +293,8 @@ function SummaryCard({
           {formatCurrency(summary.totalCost)}
         </Figure>
 
-        <Figure label="Net profit" highlight={highlight}>
+        <Figure label="Profit" highlight={highlight}>
           <ProfitValue amount={summary.totalProfit} onDark={highlight} />
-        </Figure>
-
-        <Figure label="Expenses" highlight={highlight}>
-          {formatCurrency(summary.totalExpenses)}
         </Figure>
 
         <Figure label="Collected" highlight={highlight}>

@@ -14,7 +14,6 @@ import { parseDateKey } from "@/lib/shop/report-range";
 import {
   getDayDetail,
   type DayCollection,
-  type DayExpense,
   type DaySale,
 } from "@/lib/shop/reports";
 import {
@@ -230,28 +229,6 @@ export default async function DayDetailPage({
     },
   ];
 
-  const expenseColumns: Array<Column<DayExpense>> = [
-    {
-      header: "Expense",
-      cell: (row) => (
-        <div>
-          <span className="font-medium text-slate-950">{row.name}</span>
-          {row.notes ? <p className="text-xs text-slate-500">{row.notes}</p> : null}
-        </div>
-      ),
-    },
-    {
-      header: "Recorded by",
-      hideOnMobile: true,
-      cell: (row) => row.createdByName ?? "—",
-    },
-    {
-      header: "Amount",
-      align: "right",
-      cell: (row) => <span className="font-medium text-rose-700">{formatCurrency(row.amount)}</span>,
-    },
-  ];
-
   const collectedOnOlderSales = detail.collections
     .filter((collection) => collection.fromEarlierSale)
     .reduce((total, collection) => total + collection.amount, 0);
@@ -279,10 +256,10 @@ export default async function DayDetailPage({
           delta={`${formatNumber(detail.summary.itemCount)} unit(s)`}
         />
         <StatCard
-           label="Net profit"
-           value={formatCurrency(detail.summary.totalProfit)}
-           delta={
-             detail.summary.totalProfit < 0 ? "Sold at a loss" : "Earned this day"
+          label="Profit"
+          value={formatCurrency(detail.summary.totalProfit)}
+          delta={
+            detail.summary.totalProfit < 0 ? "Sold at a loss" : "Earned this day"
           }
         />
         <StatCard
@@ -295,21 +272,6 @@ export default async function DayDetailPage({
           }
         />
       </div>
-
-      <Panel>
-        <PanelHeader
-          title="Expenses on this day"
-          description="These operating costs are deducted from the day's sales profit to calculate net profit."
-          actions={<ButtonLink href="/dashboard/expenses" variant="secondary">Manage expenses</ButtonLink>}
-        />
-        <DataTable
-          rows={detail.expenses}
-          columns={expenseColumns}
-          rowKey={(row) => row.id}
-          emptyTitle="No expenses on this day"
-          emptyDescription="No operating expenses were recorded for this date."
-        />
-      </Panel>
 
       <Panel>
         <PanelHeader

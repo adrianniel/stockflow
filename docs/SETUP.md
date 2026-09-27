@@ -230,6 +230,5 @@ Honest list of what is **not** covered, so none of it is a surprise later.
 - **Email changes are not supported in-app.** Sign-in credentials live in
   `auth.users`; `users.email` is a display copy and can drift if the address is
   changed in the Supabase dashboard.
-- **Expense management requires migration `20260801122100_expenses.sql`.** Apply
-  it only after creating a backup/export of the shared Supabase database, then
-  run the verification query and test the expense and report flows.
+- **Expense management is deliberately absent.** SRS §14 lists it under *not
+  included yet*, and §15 places it in future enhancements.
