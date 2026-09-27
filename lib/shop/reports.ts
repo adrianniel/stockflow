@@ -51,6 +51,8 @@ export type SalesSummary = {
    */
   totalCost: number;
   totalProfit: number;
+  /** Sales profit after active operating expenses for the same dates. */
+  totalExpenses: number;
   /**
    * Cash actually received in this range, from `sale_payments.collected_at`.
    *
@@ -108,6 +110,7 @@ export type DayDetail = {
   sales: DaySale[];
   /** Payments received on this date, keyed on collected_at. */
   collections: DayCollection[];
+  expenses: DayExpense[];
   /** Accrual figures for the sales above. */
   summary: SalesSummary;
 };
@@ -142,12 +145,22 @@ export type DayCollection = {
   fromEarlierSale: boolean;
 };
 
+export type DayExpense = {
+  id: string;
+  date: string;
+  name: string;
+  amount: number;
+  notes: string | null;
+  createdByName: string | null;
+};
+
 const EMPTY_SUMMARY: SalesSummary = {
   saleCount: 0,
   itemCount: 0,
   totalSales: 0,
   totalCost: 0,
   totalProfit: 0,
+  totalExpenses: 0,
   totalCollected: 0,
   outstanding: 0,
 };
@@ -252,6 +265,15 @@ type PaymentAggregateRow = {
   collected_at: string;
 };
 
+type ExpenseAggregateRow = {
+  id: string;
+  expense_date: string;
+  name: string;
+  amount: string;
+  notes: string | null;
+  users: { name: string | null } | { name: string | null }[] | null;
+};
+
 /**
  * Loads payments collected in a half-open range [from, to).
  *
@@ -298,6 +320,7 @@ function sumPayments(rows: PaymentAggregateRow[]): number {
 function summarize(
   rows: SaleAggregateRow[],
   collected: number,
+  expenses: number,
 ): SalesSummary {
   const summary = rows.reduce<SalesSummary>((summary, row) => {
     const total = toNumber(row.total_amount);
@@ -314,12 +337,42 @@ function summarize(
       // SalesSummary.totalCost.
       totalCost: summary.totalCost + (total - profit),
       totalProfit: summary.totalProfit + profit,
+      totalExpenses: summary.totalExpenses,
       totalCollected: 0,
       outstanding: summary.outstanding + (total - paid),
     };
   }, { ...EMPTY_SUMMARY });
 
-  return { ...summary, totalCollected: collected };
+  return {
+    ...summary,
+    totalCollected: collected,
+    totalExpenses: expenses,
+    totalProfit: summary.totalProfit - expenses,
+  };
+}
+
+async function loadExpenses(
+  { supabase, shopId }: ShopContext,
+  from: Date,
+  to: Date,
+): Promise<ExpenseAggregateRow[]> {
+  const { data, error } = await supabase
+    .from("expenses")
+    .select("id, expense_date, name, amount, notes, users ( name )")
+    .eq("shop_id", shopId)
+    .gte("expense_date", dateKey(from))
+    .lt("expense_date", dateKey(to))
+    .is("deleted_at", null)
+    .order("expense_date", { ascending: false })
+    .limit(ROW_CEILING);
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = (data ?? []) as ExpenseAggregateRow[];
+  assertNotTruncated(rows.length, "expenses", from, to);
+  return rows;
 }
 
 /**
@@ -334,10 +387,11 @@ export async function getDashboardSummary(
   const { supabase, shopId } = context;
   const todayStart = startOfDay(new Date());
 
-  const [todaySales, todayPayments, productsResult, batchesResult] =
+  const [todaySales, todayPayments, todayExpenses, productsResult, batchesResult] =
     await Promise.all([
       loadSales(context, todayStart, addDays(todayStart, 1)),
       loadPayments(context, todayStart, addDays(todayStart, 1)),
+      loadExpenses(context, todayStart, addDays(todayStart, 1)),
       supabase
         .from("products")
         .select("id", { count: "exact", head: true })
@@ -389,7 +443,11 @@ export async function getDashboardSummary(
   ).length;
 
   return {
-    today: summarize(todaySales, sumPayments(todayPayments)),
+    today: summarize(
+      todaySales,
+      sumPayments(todayPayments),
+      todayExpenses.reduce((sum, expense) => sum + toNumber(expense.amount), 0),
+    ),
     productCount,
     inventory: {
       quantityOnHand,
@@ -424,9 +482,10 @@ export async function getProfitReport(
   const weekStart = addDays(todayStart, -6);
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const [rows, payments] = await Promise.all([
+  const [rows, payments, expenses] = await Promise.all([
     loadSales(context, range.from, range.to, range.filter),
     loadPayments(context, range.from, range.to),
+    loadExpenses(context, range.from, range.to),
   ]);
 
   // Clamped to the range so a headline figure never counts a day the range does
@@ -441,6 +500,11 @@ export async function getProfitReport(
       payments.filter((payment) => new Date(payment.collected_at) >= from),
     );
 
+  const expensesSince = (from: Date) =>
+    expenses
+      .filter((expense) => expense.expense_date >= dateKey(from))
+      .reduce((sum, expense) => sum + toNumber(expense.amount), 0);
+
   const summaryFrom = (from: Date) => {
     // A boundary after the range's end selects nothing, which is right: asking
     // for "today" inside a range that ended last week has no sales in it.
@@ -453,6 +517,7 @@ export async function getProfitReport(
     return summarize(
       rows.filter((row) => inRange(row, start)),
       collectedSince(start),
+      expensesSince(start),
     );
   };
 
@@ -487,6 +552,15 @@ export async function getProfitReport(
     );
   }
 
+  const expensesByDay = new Map<string, number>();
+
+  for (const expense of expenses) {
+    expensesByDay.set(
+      expense.expense_date,
+      (expensesByDay.get(expense.expense_date) ?? 0) + toNumber(expense.amount),
+    );
+  }
+
   // Every day in the range gets a row, including days with no sales — a gap in
   // the table reads as missing data rather than as a quiet day. Newest first,
   // which is the order an owner reads a report in.
@@ -498,13 +572,21 @@ export async function getProfitReport(
 
     return {
       date: key,
-      summary: summarize(byDay.get(key) ?? [], collectedByDay.get(key) ?? 0),
+      summary: summarize(
+        byDay.get(key) ?? [],
+        collectedByDay.get(key) ?? 0,
+        expensesByDay.get(key) ?? 0,
+      ),
     };
   });
 
   return {
     range,
-    total: summarize(rows, sumPayments(payments)),
+    total: summarize(
+      rows,
+      sumPayments(payments),
+      expenses.reduce((sum, expense) => sum + toNumber(expense.amount), 0),
+    ),
     today: summaryFrom(todayStart),
     last7Days: summaryFrom(weekStart),
     thisMonth: summaryFrom(monthStart),
@@ -576,7 +658,7 @@ export async function getDayDetail(
 
   const to = addDays(from, 1);
 
-  const [salesResult, paymentsResult] = await Promise.all([
+  const [salesResult, paymentsResult, expensesResult] = await Promise.all([
     supabase
       .from("sales")
       .select(
@@ -618,6 +700,14 @@ export async function getDayDetail(
       .is("voided_at", null)
       .order("collected_at", { ascending: false })
       .limit(ROW_CEILING),
+    supabase
+      .from("expenses")
+      .select("id, expense_date, name, amount, notes, users ( name )")
+      .eq("shop_id", shopId)
+      .eq("expense_date", key)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(ROW_CEILING),
   ]);
 
   if (salesResult.error) {
@@ -628,11 +718,17 @@ export async function getDayDetail(
     throw paymentsResult.error;
   }
 
+  if (expensesResult.error) {
+    throw expensesResult.error;
+  }
+
   const saleRows = (salesResult.data ?? []) as DaySaleRow[];
   const paymentRows = (paymentsResult.data ?? []) as DayPaymentRow[];
+  const expenseRows = (expensesResult.data ?? []) as ExpenseAggregateRow[];
 
   assertNotTruncated(saleRows.length, "sales", from, to);
   assertNotTruncated(paymentRows.length, "payments", from, to);
+  assertNotTruncated(expenseRows.length, "expenses", from, to);
 
   const sales: DaySale[] = saleRows.map((row) => {
     const total = toNumber(row.total_amount);
@@ -678,16 +774,30 @@ export async function getDayDetail(
     };
   });
 
+  const expenses: DayExpense[] = expenseRows.map((row) => ({
+    id: row.id,
+    date: row.expense_date,
+    name: row.name,
+    amount: toNumber(row.amount),
+    notes: row.notes,
+    createdByName: firstOf(row.users)?.name ?? null,
+  }));
+
+  const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+
   return {
     date: key,
     sales,
     collections,
+    expenses,
     summary: {
       saleCount: sales.length,
       itemCount: sales.reduce((sum, sale) => sum + sale.itemCount, 0),
       totalSales: sales.reduce((sum, sale) => sum + sale.total, 0),
       totalCost: sales.reduce((sum, sale) => sum + sale.cost, 0),
-      totalProfit: sales.reduce((sum, sale) => sum + sale.profit, 0),
+      totalProfit:
+        sales.reduce((sum, sale) => sum + sale.profit, 0) - totalExpenses,
+      totalExpenses,
       totalCollected: collections.reduce(
         (sum, payment) => sum + payment.amount,
         0,
