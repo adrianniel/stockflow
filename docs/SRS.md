@@ -515,10 +515,10 @@ YES:
 - Sale voiding, with stock restored to the original batches
 - Profit calculation
 - Basic reports
+- Expense recording and net-profit reporting
 
 NOT INCLUDED YET:
 
-- Expense management
 - Subscription system
 - Payment processing
 - Advanced analytics
@@ -529,6 +529,11 @@ NOT INCLUDED YET:
 # 15. Future Enhancements
 
 Possible future features:
+
+Expense management beyond the MVP may later include expense categories,
+recurring expenses, suppliers, and attachment support. The MVP supports
+recording shop expenses against today or a past date, editing them, and soft
+deleting mistakes. Active expenses reduce the day's net profit.
 
 - Expense tracking
 - Advanced financial reports
