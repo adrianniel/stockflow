@@ -126,6 +126,12 @@ function ExpenseDialog({
 }) {
   const isEdit = Boolean(expense);
   const [state, formAction] = useActionState(isEdit ? updateExpense : createExpense, IDLE);
+  const today = localToday();
+  const initialDate = expense?.expense_date ?? today;
+  const [dateMode, setDateMode] = useState<"today" | "custom">(
+    initialDate === today ? "today" : "custom",
+  );
+  const [selectedDate, setSelectedDate] = useState(initialDate);
 
   useEffect(() => {
     if (state.status === "success") {
@@ -137,16 +143,43 @@ function ExpenseDialog({
     <Modal open={open} onClose={onClose} title={title} description={description}>
       <form action={formAction} className="space-y-4">
         {expense ? <input type="hidden" name="id" value={expense.id} /> : null}
+        <input type="hidden" name="expense_date" value={selectedDate} />
 
-        <Field label="Date" htmlFor="expense-date" error={fieldError(state, "expense_date")}>
-          <Input
-            id="expense-date"
-            name="expense_date"
-            type="date"
-            defaultValue={expense?.expense_date ?? localToday()}
-            max={localToday()}
-            required
-          />
+        <Field label="Expense date" htmlFor="expense-date" error={fieldError(state, "expense_date")}>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Button
+              type="button"
+              variant={dateMode === "today" ? "primary" : "secondary"}
+              onClick={() => {
+                setDateMode("today");
+                setSelectedDate(today);
+              }}
+            >
+              Today
+            </Button>
+            <Button
+              type="button"
+              variant={dateMode === "custom" ? "primary" : "secondary"}
+              onClick={() => setDateMode("custom")}
+            >
+              Select date
+            </Button>
+          </div>
+
+          {dateMode === "custom" ? (
+            <div className="mt-3">
+              <Input
+                id="expense-date"
+                type="date"
+                value={selectedDate}
+                max={today}
+                onChange={(event) => setSelectedDate(event.target.value)}
+                required
+              />
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-slate-500">This expense will be recorded for today.</p>
+          )}
         </Field>
 
         <Field label="Expense name" htmlFor="expense-name" error={fieldError(state, "name")}>
