@@ -26,6 +26,10 @@
  */
 export const MAX_RANGE_DAYS = 92;
 
+/** StockFlow's target shops use Philippine calendar days and clock time. */
+export const SHOP_TIME_ZONE = "Asia/Manila";
+const SHOP_UTC_OFFSET_MINUTES = 8 * 60;
+
 export const RANGE_PRESETS = ["today", "7d", "30d", "month", "custom"] as const;
 
 export type RangePreset = (typeof RANGE_PRESETS)[number];
@@ -73,30 +77,42 @@ export type ReportRange = {
 };
 
 export function startOfDay(date: Date): Date {
-  const copy = new Date(date);
-  copy.setHours(0, 0, 0, 0);
-
-  return copy;
+  return parseDateKey(dateKey(date)) as Date;
 }
 
 export function addDays(date: Date, days: number): Date {
-  const copy = new Date(date);
-  copy.setDate(copy.getDate() + days);
+  const key = dateKey(date);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
 
-  return copy;
+  if (!match) {
+    return new Date(date.getTime() + days * 86_400_000);
+  }
+
+  const copy = new Date(
+    Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])),
+  );
+  copy.setUTCDate(copy.getUTCDate() + days);
+
+  return shopMidnight(copy.getUTCFullYear(), copy.getUTCMonth() + 1, copy.getUTCDate());
 }
 
-/** Local calendar date as YYYY-MM-DD. The key sales and payments bucket by. */
+/** Shop calendar date as YYYY-MM-DD. The key sales and payments bucket by. */
 export function dateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: SHOP_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
 
   return `${year}-${month}-${day}`;
 }
 
 /**
- * Parses YYYY-MM-DD as a *local* midnight.
+ * Parses YYYY-MM-DD as midnight in the shop timezone.
  *
  * `new Date("2026-08-05")` is not this: the spec parses a date-only string as
  * UTC, so in any timezone behind UTC it lands on the previous evening and the
@@ -128,7 +144,14 @@ export function parseDateKey(value: string): Date | null {
     return null;
   }
 
-  return startOfDay(date);
+  return shopMidnight(year, month, day);
+}
+
+/** Converts a shop calendar midnight to the corresponding UTC instant. */
+function shopMidnight(year: number, month: number, day: number): Date {
+  return new Date(
+    Date.UTC(year, month - 1, day) - SHOP_UTC_OFFSET_MINUTES * 60_000,
+  );
 }
 
 /** Whole days between two local midnights. Rounded, so DST shifts don't skew it. */
@@ -164,6 +187,7 @@ export function parseReportRange(
   now: Date = new Date(),
 ): ReportRange {
   const today = startOfDay(now);
+  const todayKey = dateKey(now);
   const filter: SaleFilter = isFilter(params.filter) ? params.filter : "all";
 
   const requestedFrom = params.from ? parseDateKey(params.from) : null;
@@ -193,7 +217,7 @@ export function parseReportRange(
       break;
 
     case "month":
-      from = new Date(now.getFullYear(), now.getMonth(), 1);
+       from = parseDateKey(`${todayKey.slice(0, 7)}-01`) as Date;
       lastDay = today;
       break;
 

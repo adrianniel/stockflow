@@ -6,7 +6,7 @@ import type {
   ExportSale,
   SalesExportData,
 } from "@/lib/shop/report-export";
-import { dateKey } from "@/lib/shop/report-range";
+import { dateKey, SHOP_TIME_ZONE } from "@/lib/shop/report-range";
 
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
@@ -135,7 +135,8 @@ function money(value: number): string {
 
 function displayDate(value: string | null): string {
   return value
-    ? new Intl.DateTimeFormat("en-PH", {
+      ? new Intl.DateTimeFormat("en-PH", {
+          timeZone: SHOP_TIME_ZONE,
         year: "numeric",
         month: "short",
         day: "numeric",
