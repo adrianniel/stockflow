@@ -6,7 +6,7 @@
 -- financial history.
 
 CREATE TABLE IF NOT EXISTS public.expenses (
-    id          uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id          uuid PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
     shop_id     uuid NOT NULL REFERENCES public.shops(id) ON DELETE CASCADE,
     expense_date date NOT NULL DEFAULT CURRENT_DATE,
     name        text NOT NULL CHECK (length(btrim(name)) > 0),
