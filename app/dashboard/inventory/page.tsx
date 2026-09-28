@@ -1,5 +1,4 @@
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
-import { StatCard } from "@/components/dashboard/stat-card";
 import { Panel, PanelHeader } from "@/components/ui/panel";
 import { requireRole } from "@/lib/auth/guards";
 import { getDashboardIdentity } from "@/lib/dashboard/identity";
@@ -56,41 +55,44 @@ export default async function InventoryPage() {
     <>
       <DashboardHeader
         title="Inventory"
-        subtitle="What is on the shelf, and what it is worth."
+        subtitle="Receive stock and review what is currently on your shelves."
         userName={displayName}
         userEmail={displayEmail}
         role={profile.role}
         shopName={profile.shop_name}
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <StatCard
-          label="Units on hand"
-          value={formatNumber(totalUnits)}
-          delta={`${inventory.length} product(s)`}
-        />
-        <StatCard
-          label="Stock value"
-          value={formatCurrency(totalValue)}
-          delta="At capital price"
-        />
-        <StatCard
-          label="Out of stock"
-          value={formatNumber(outOfStock)}
-          delta={outOfStock === 0 ? "All stocked" : "Needs reordering"}
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-stretch sm:gap-4">
+        <div className="grid min-w-0 grid-cols-3 gap-2 sm:gap-3">
+          <InventoryStatusCard
+            label="Units on hand"
+            value={formatNumber(totalUnits)}
+            detail={`${inventory.length} products`}
+          />
+          <InventoryStatusCard
+            label="Stock value"
+            value={formatCurrency(totalValue)}
+            detail="At cost"
+          />
+          <InventoryStatusCard
+            label="Out of stock"
+            value={formatNumber(outOfStock)}
+            detail={outOfStock === 0 ? "All stocked" : "Needs stock"}
+            tone={outOfStock > 0 ? "warning" : "positive"}
+          />
+        </div>
+        <ReceiveStockDialog
+          products={productOptions}
+          defaultInterest={defaultInterest}
+          triggerLabel="Receive stock"
+          triggerClassName="min-h-12 w-full px-5 py-3 text-sm font-semibold shadow-md shadow-blue-950/15 sm:h-full sm:w-auto sm:min-w-40"
         />
       </div>
 
       <Panel>
         <PanelHeader
           title="Stock by product"
-          description="Selling price shown is the oldest batch in stock — the one the next sale will draw from."
-          actions={
-            <ReceiveStockDialog
-              products={productOptions}
-              defaultInterest={defaultInterest}
-            />
-          }
+          description="Search, filter, and review batch availability. Selling price is the oldest batch in stock—the one the next sale will draw from."
         />
 
         <InventoryBrowser
@@ -99,5 +101,38 @@ export default async function InventoryPage() {
         />
       </Panel>
     </>
+  );
+}
+
+function InventoryStatusCard({
+  label,
+  value,
+  detail,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  tone?: "neutral" | "positive" | "warning";
+}) {
+  const valueColor =
+    tone === "warning"
+      ? "text-amber-700"
+      : tone === "positive"
+        ? "text-emerald-700"
+        : "text-[#07152e]";
+
+  return (
+    <article className="min-w-0 rounded-xl border border-slate-200 bg-white/90 px-2.5 py-2.5 shadow-[0_6px_20px_rgba(15,23,42,0.04)] sm:rounded-2xl sm:px-4 sm:py-3">
+      <p className="truncate text-[0.58rem] font-semibold uppercase leading-4 tracking-[0.08em] text-slate-500 sm:text-xs sm:tracking-[0.12em]">
+        {label}
+      </p>
+      <p title={value} className={`mt-1 truncate text-xs font-bold tracking-tight sm:text-lg ${valueColor}`}>
+        {value}
+      </p>
+      <p className="mt-0.5 truncate text-[0.6rem] leading-4 text-slate-500 sm:text-xs">
+        {detail}
+      </p>
+    </article>
   );
 }
