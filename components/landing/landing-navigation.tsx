@@ -76,7 +76,7 @@ export function LandingNavigation() {
   const activeLabel = links.find((link) => link.href === activeHref)?.label ?? "Sign in";
 
   return (
-    <div ref={menuRef} className="relative z-50">
+    <div ref={menuRef} className="fixed right-4 top-4 z-[60] sm:right-7 xl:right-[calc((100vw-80rem)/2+2.5rem)]">
       <motion.button
         type="button"
         aria-label={`${activeLabel}; ${open ? "close" : "open"} navigation menu`}
