@@ -6,6 +6,7 @@ import { Logo } from "@/components/ui/logo";
 import { getCurrentUser } from "@/lib/supabase/auth.server";
 import { WorkflowStepper } from "@/components/landing/workflow-stepper";
 import { LandingNavigation } from "@/components/landing/landing-navigation";
+import { UpdateAnnouncement } from "@/components/updates/update-announcement";
 
 import { LoginForm } from "./login/login-form";
 
@@ -348,6 +349,8 @@ export default async function Home({
         <p>StockFlow · Inventory and sales management</p>
         <Credit />
       </footer>
+
+      <UpdateAnnouncement audience="landing" />
     </main>
   );
 }

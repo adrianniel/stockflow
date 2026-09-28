@@ -122,6 +122,21 @@ Before modifying existing code:
 
 ---
 
+# Release Announcements
+
+- Keep the current landing-page and authenticated-account update copy in
+  `lib/updates/current-release.ts`.
+- When publishing a new update announcement, change its `id` so browsers can
+  recognize the new release, then update the landing and account bullet lists.
+- Announcements use browser `localStorage` for once-per-local-day reminders,
+  the five-day display limit, and the permanent “Don’t show this again” choice.
+- Do not add announcement preferences or display bookkeeping to Supabase or
+  change business records for announcement UI.
+- Keep the public landing and signed-in account messages distinct; keep copy
+  short, mobile-readable, and synchronized with what actually ships.
+
+---
+
 # Git Rules
 
 Before suggesting a commit:

@@ -6,6 +6,7 @@ import { Credit } from "@/components/ui/credit";
 import { requireSession } from "@/lib/auth/guards";
 import { navigationForRole } from "@/lib/auth/roles";
 import { getCurrentUser, getUserProfile } from "@/lib/supabase/auth.server";
+import { UpdateAnnouncement } from "@/components/updates/update-announcement";
 
 /**
  * Puts the shop's name in the browser tab, so a tab reads "Sales | Kang Auto
@@ -66,6 +67,7 @@ export default async function DashboardLayout({
           <Credit className="mt-auto py-2 text-center" />
         </main>
       </div>
+      <UpdateAnnouncement audience="account" />
     </div>
   );
 }
