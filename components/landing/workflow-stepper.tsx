@@ -41,8 +41,8 @@ export function WorkflowStepper({ steps }: { steps: WorkflowStep[] }) {
 
   return (
     <div className="mt-9 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_20px_65px_rgba(15,23,42,0.08)] sm:mt-10 sm:rounded-[2rem]">
-      <div className="flex flex-col items-stretch gap-3 border-b border-slate-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-7 sm:py-5">
-        <p className="shrink-0 text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">
+      <div className="flex flex-col items-stretch gap-3 border-b border-white/10 bg-gradient-to-r from-[#07152e] via-[#0b1c3b] to-[#07152e] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-7 sm:py-5">
+        <p className="shrink-0 text-xs font-semibold uppercase tracking-[0.15em] text-slate-300">
           {complete ? "Flow complete" : `Step ${activeStep + 1} of ${steps.length}`}
         </p>
         <div className="flex w-full min-w-0 items-center justify-between gap-1 sm:w-auto sm:flex-1 sm:justify-end sm:gap-1.5" aria-label="Workflow steps">
@@ -59,16 +59,16 @@ export function WorkflowStepper({ steps }: { steps: WorkflowStep[] }) {
                   aria-current={isCurrent ? "step" : undefined}
                   className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[0.65rem] font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:h-8 sm:w-8 sm:text-xs ${
                     isCurrent
-                      ? "bg-blue-600 text-white shadow-md shadow-blue-200"
+                      ? "bg-blue-500 text-white shadow-md shadow-blue-950/40"
                       : isDone
-                        ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
-                        : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                        ? "bg-blue-200 text-blue-950 hover:bg-blue-100"
+                        : "bg-white/10 text-slate-200 hover:bg-white/20"
                   }`}
                 >
                   {isDone ? <CheckIcon /> : index + 1}
                 </button>
                 {index < steps.length - 1 ? (
-                  <span className={`hidden h-0.5 w-2 rounded-full sm:block sm:w-3 ${index < activeStep || complete ? "bg-blue-300" : "bg-slate-200"}`} />
+                  <span className={`hidden h-0.5 w-2 rounded-full sm:block sm:w-3 ${index < activeStep || complete ? "bg-blue-300" : "bg-white/20"}`} />
                 ) : null}
               </div>
             );
