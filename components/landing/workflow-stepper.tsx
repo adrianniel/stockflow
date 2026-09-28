@@ -41,23 +41,23 @@ export function WorkflowStepper({ steps }: { steps: WorkflowStep[] }) {
 
   return (
     <div className="mt-9 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_20px_65px_rgba(15,23,42,0.08)] sm:mt-10 sm:rounded-[2rem]">
-      <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-7 sm:py-5">
+      <div className="flex flex-col items-stretch gap-3 border-b border-slate-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-7 sm:py-5">
         <p className="shrink-0 text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">
           {complete ? "Flow complete" : `Step ${activeStep + 1} of ${steps.length}`}
         </p>
-        <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5 sm:gap-2" aria-label="Workflow steps">
+        <div className="flex w-full min-w-0 items-center justify-between gap-1 sm:w-auto sm:flex-1 sm:justify-end sm:gap-1.5" aria-label="Workflow steps">
           {steps.map((step, index) => {
             const isDone = complete || index < activeStep;
             const isCurrent = !complete && index === activeStep;
 
             return (
-              <div key={step.number} className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+              <div key={step.number} className="flex min-w-0 items-center gap-1 sm:gap-2">
                 <button
                   type="button"
                   onClick={() => goToStep(index)}
                   aria-label={`Go to step ${index + 1}: ${step.title}`}
                   aria-current={isCurrent ? "step" : undefined}
-                  className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+                  className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[0.65rem] font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:h-8 sm:w-8 sm:text-xs ${
                     isCurrent
                       ? "bg-blue-600 text-white shadow-md shadow-blue-200"
                       : isDone
@@ -143,7 +143,7 @@ export function WorkflowStepper({ steps }: { steps: WorkflowStep[] }) {
           onClick={complete ? () => goToStep(0) : goNext}
           className="min-h-11 rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
         >
-          {complete ? "Start again" : activeStep === steps.length - 1 ? "Complete" : "Continue"}
+          {complete ? "Start again" : activeStep === steps.length - 1 ? "Complete" : "Next"}
         </button>
       </div>
     </div>
