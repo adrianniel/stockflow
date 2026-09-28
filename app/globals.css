@@ -60,3 +60,29 @@ body {
     opacity: 0.48;
   }
 }
+
+.liquid-nav-menu {
+  isolation: isolate;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.2),
+    rgba(183, 210, 255, 0.1) 45%,
+    rgba(255, 255, 255, 0.07)
+  );
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(28px) saturate(180%);
+}
+
+.liquid-nav-menu::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle at 15% 0%,
+    rgba(255, 255, 255, 0.18),
+    transparent 58%
+  );
+  content: "";
+  pointer-events: none;
+}

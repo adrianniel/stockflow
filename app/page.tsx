@@ -5,6 +5,7 @@ import { Credit } from "@/components/ui/credit";
 import { Logo } from "@/components/ui/logo";
 import { getCurrentUser } from "@/lib/supabase/auth.server";
 import { WorkflowStepper } from "@/components/landing/workflow-stepper";
+import { LandingNavigation } from "@/components/landing/landing-navigation";
 
 import { LoginForm } from "./login/login-form";
 
@@ -150,8 +151,7 @@ export default async function Home({
           <div className="absolute inset-0 bg-gradient-to-b from-[#07152e]/25 via-[#07152e]/35 to-[#07152e]/85" />
         </div>
 
-        <header className="sticky top-0 z-30 border-b border-white/10 bg-[#07152e]/85 backdrop-blur-xl">
-          <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 sm:px-7 md:flex-row md:items-center md:justify-between lg:px-10">
+        <header className="relative z-40 mx-auto flex w-full max-w-7xl items-start justify-between gap-4 px-4 py-4 sm:px-7 sm:py-5 lg:px-10">
             <a href="#home" className="flex w-fit items-center gap-3" aria-label="StockFlow home">
               <Logo size="sm" priority />
               <span>
@@ -159,14 +159,7 @@ export default async function Home({
                 <span className="block text-xs text-slate-400">Inventory, clearly managed.</span>
               </span>
             </a>
-
-            <nav aria-label="Main navigation" className="flex items-center justify-between gap-2 overflow-x-auto text-xs font-medium sm:gap-5 sm:text-sm md:justify-end">
-              <a className="whitespace-nowrap text-slate-300 transition hover:text-white" href="#about">About</a>
-              <a className="whitespace-nowrap text-slate-300 transition hover:text-white" href="#features">Features</a>
-              <a className="whitespace-nowrap text-slate-300 transition hover:text-white" href="#contact">Contact</a>
-              <a className="whitespace-nowrap rounded-xl border border-blue-300/30 bg-blue-400/15 px-3 py-2 text-blue-100 transition hover:bg-blue-400/25 sm:px-4" href="#signin">Sign in</a>
-            </nav>
-          </div>
+            <LandingNavigation />
         </header>
 
         <section id="home" className="mx-auto grid min-h-[calc(100svh-76px)] w-full max-w-7xl items-center gap-8 px-4 py-8 sm:px-7 sm:py-12 md:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] md:gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(370px,440px)] lg:px-10">
@@ -231,11 +224,25 @@ export default async function Home({
 
       <section id="features" className="scroll-mt-24 px-4 py-16 sm:px-7 sm:py-20 lg:px-10">
         <div className="mx-auto max-w-7xl">
-          <SectionHeading
-            eyebrow="From setup to reporting"
-            title="A complete shop workflow, in one place."
-            description="See how StockFlow supports the day-to-day work of a shop, from adding products and receiving stock to recording sales and reviewing net profit."
-          />
+          <div className="relative isolate mb-10 min-h-[16rem] overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-100 sm:min-h-[19rem]">
+            <Image
+              src="/features.jpg"
+              alt=""
+              fill
+              sizes="(max-width: 768px) 100vw, 90vw"
+              className="-z-10 object-cover object-center"
+            />
+            <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-r from-white/95 via-white/75 to-white/20" />
+            <div className="relative flex min-h-[16rem] max-w-3xl flex-col justify-center p-6 sm:min-h-[19rem] sm:p-10 lg:p-12">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">From setup to reporting</p>
+              <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight text-slate-950 sm:text-4xl">A complete shop workflow, in one place.</h2>
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-700 sm:text-base">
+                See how StockFlow supports the day-to-day work of a shop, from
+                adding products and receiving stock to recording sales and
+                reviewing net profit.
+              </p>
+            </div>
+          </div>
 
           <WorkflowStepper steps={workflows} />
 
@@ -287,8 +294,16 @@ export default async function Home({
         </div>
       </section>
 
-      <section className="px-4 py-16 sm:px-7 sm:py-20 lg:px-10">
-        <div className="mx-auto grid max-w-7xl overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_70px_rgba(15,23,42,0.08)] md:grid-cols-[0.85fr_1.15fr]">
+      <section className="relative isolate scroll-mt-24 overflow-hidden px-4 py-16 sm:px-7 sm:py-20 lg:px-10">
+        <Image
+          src="/about.jpg"
+          alt=""
+          fill
+          sizes="100vw"
+          className="-z-10 object-cover object-center"
+        />
+        <div aria-hidden="true" className="absolute inset-0 -z-10 bg-[#07152e]/78" />
+        <div className="relative mx-auto grid max-w-7xl overflow-hidden rounded-[2rem] border border-white/15 bg-slate-950/45 shadow-[0_20px_70px_rgba(0,0,0,0.22)] backdrop-blur-xl md:grid-cols-[0.85fr_1.15fr]">
           <div className="relative min-h-[320px] bg-slate-200 sm:min-h-[420px] md:min-h-full">
             <Image
               src="/creator_Niel%20Adrian.jpg"
@@ -298,11 +313,11 @@ export default async function Home({
               className="object-cover object-[center_35%]"
             />
           </div>
-          <div className="flex flex-col justify-center p-6 sm:p-9 lg:p-12">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">Meet the creator</p>
-            <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">Niel Adrian Garig</h2>
-            <p className="mt-2 text-sm font-medium text-slate-500">Computer Science student · BISU Bilar Campus</p>
-            <div className="mt-6 space-y-4 text-sm leading-7 text-slate-600 sm:text-base">
+          <div className="flex flex-col justify-center p-6 text-white sm:p-9 lg:p-12">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-200">Meet the creator</p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-tight text-white">Niel Adrian Garig</h2>
+            <p className="mt-2 text-sm font-medium text-blue-100/75">Computer Science student · BISU Bilar Campus</p>
+            <div className="mt-6 space-y-4 text-sm leading-7 text-slate-200 sm:text-base">
               <p>
                 I’m taking a Bachelor of Science in Computer Science at Bohol
                 Island State University, Bilar Campus. I enjoy building useful
@@ -320,7 +335,7 @@ export default async function Home({
                 bringing your shop onto StockFlow, I’d be glad to talk.
               </p>
             </div>
-            <a href={`mailto:${CONTACT_EMAIL}`} className="mt-7 inline-flex min-h-12 w-fit items-center justify-center rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-900 transition hover:border-blue-200 hover:bg-blue-50">
+            <a href={`mailto:${CONTACT_EMAIL}`} className="mt-7 inline-flex min-h-12 w-fit items-center justify-center rounded-2xl border border-white/25 bg-white/[0.08] px-5 py-3 text-sm font-semibold text-white transition hover:border-blue-200/50 hover:bg-white/[0.14]">
               Contact me: {CONTACT_EMAIL}
             </a>
           </div>
