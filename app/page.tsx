@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { Credit } from "@/components/ui/credit";
 import { Logo } from "@/components/ui/logo";
 import { getCurrentUser } from "@/lib/supabase/auth.server";
+import { WorkflowStepper } from "@/components/landing/workflow-stepper";
 
 import { LoginForm } from "./login/login-form";
 
@@ -236,16 +237,7 @@ export default async function Home({
             description="See how StockFlow supports the day-to-day work of a shop, from adding products and receiving stock to recording sales and reviewing net profit."
           />
 
-          <ol className="mt-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {workflows.map((step) => (
-              <li key={step.number} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_12px_40px_rgba(15,23,42,0.045)] sm:p-6">
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-xs font-bold text-blue-700">{step.number}</span>
-                <h3 className="mt-4 text-base font-semibold tracking-tight text-slate-950">{step.title}</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-600">{step.description}</p>
-                <p className="mt-4 border-t border-slate-100 pt-3 text-xs font-medium leading-5 text-slate-500">{step.detail}</p>
-              </li>
-            ))}
-          </ol>
+          <WorkflowStepper steps={workflows} />
 
           <div className="mt-14 rounded-[2rem] bg-slate-950 px-5 py-8 text-white sm:px-8 sm:py-10 lg:px-12">
             <div className="max-w-2xl">
