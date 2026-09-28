@@ -101,7 +101,11 @@ export function LoginForm({ blocked }: LoginFormProps) {
         </p>
       ) : null}
 
-      <Button type="submit" disabled={isSubmitting} className="w-full">
+      <Button
+        type="submit"
+        disabled={isSubmitting}
+        className="w-full bg-blue-500 py-3 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(59,130,246,0.35)] hover:bg-blue-400 active:bg-blue-600 focus-visible:outline-blue-300"
+      >
         {isSubmitting ? "Signing in..." : "Sign in"}
       </Button>
     </form>
