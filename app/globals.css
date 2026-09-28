@@ -30,35 +30,33 @@ body {
 .signin-glow::before {
   position: absolute;
   z-index: 0;
-  right: 12%;
-  bottom: -1.1rem;
-  left: 12%;
-  height: 2.5rem;
-  border-radius: 9999px;
-  background: #3b82f6;
+  inset: -2px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, #60a5fa, #2563eb 48%, #93c5fd);
   content: "";
-  filter: blur(28px);
-  opacity: 0.42;
+  filter: blur(16px);
+  opacity: 0.38;
   pointer-events: none;
-  animation: signin-glow-breathe 3.6s ease-in-out infinite;
+  animation: signin-edge-glow-breathe 3.6s ease-in-out infinite;
 }
 
-@keyframes signin-glow-breathe {
+@keyframes signin-edge-glow-breathe {
   0%,
   100% {
+    filter: blur(13px);
     opacity: 0.3;
-    transform: scaleX(0.88) scaleY(0.82);
   }
 
   50% {
-    opacity: 0.68;
-    transform: scaleX(1) scaleY(1.08);
+    filter: blur(21px);
+    opacity: 0.72;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .signin-glow::before {
     animation: none;
-    opacity: 0.42;
+    filter: blur(16px);
+    opacity: 0.48;
   }
 }

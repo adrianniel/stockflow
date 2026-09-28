@@ -90,7 +90,7 @@ export default async function Home({
           </p>
         </div>
 
-        <div className="signin-glow order-1 w-full max-w-md md:order-2 md:max-w-none">
+        <div className="signin-glow order-1 w-full max-w-md rounded-[1.5rem] md:order-2 md:max-w-none sm:rounded-[2rem]">
         <section className="relative z-10 w-full rounded-[1.5rem] border border-white/15 bg-slate-950/80 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.4)] backdrop-blur-xl sm:rounded-[2rem] sm:p-8">
           <div className="mb-7">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">Welcome back</p>
