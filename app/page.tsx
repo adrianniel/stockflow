@@ -1,96 +1,131 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
+import Image from "next/image";
 
 import { Credit } from "@/components/ui/credit";
 import { Logo } from "@/components/ui/logo";
 import { getCurrentUser } from "@/lib/supabase/auth.server";
 
-// `absolute` so the landing page is "StockFlow" rather than
-// "StockFlow | StockFlow" under the root layout's title template.
+import { LoginForm } from "./login/login-form";
+
 export const metadata = {
   title: { absolute: "StockFlow — Inventory and sales management" },
 };
 
-/**
- * The public entry point.
- *
- * A visitor who already holds a valid session is sent straight into
- * /dashboard, which resolves their role and forwards them to the right home.
- * Everyone else gets the landing page, which exists to be presentable rather
- * than to market — the product is a tool for a shop's staff, not a consumer
- * app, so the single action is "Sign in".
- *
- * The auth check is deliberately tolerant. `/` is not in the proxy matcher, so
- * no session refresh has run for this request, and getCurrentUser() throws if
- * Supabase rejects the token or is unreachable. A public page must still
- * render in that case, so a failure is treated as "not signed in" rather than
- * being allowed to reach the error boundary.
- */
-export default async function Home() {
-  const user = await getCurrentUser().catch(() => null);
+const NOTICES: Record<string, string> = {
+  account:
+    "This account has been deactivated. Ask the shop owner to reactivate it, or sign in with a different account.",
+  shop: "This shop is currently inactive. Contact StockFlow support to have it reactivated.",
+};
 
-  if (user) {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ blocked?: string }>;
+}) {
+  const [{ blocked }, user] = await Promise.all([
+    searchParams,
+    getCurrentUser().catch(() => null),
+  ]);
+
+  if (user && blocked !== "account" && blocked !== "shop") {
     redirect("/dashboard");
   }
 
-  return (
-    <main className="flex min-h-screen flex-col bg-slate-100 text-slate-950">
-      <div className="flex flex-col items-center justify-center gap-8 px-6 py-20 sm:py-28">
-        <Logo size="lg" priority />
+  const notice = blocked ? NOTICES[blocked] : undefined;
+  const blockedRole =
+    blocked === "account" || blocked === "shop" ? blocked : undefined;
 
-        <div className="max-w-2xl text-center">
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-            StockFlow
+  return (
+    <main className="relative isolate flex min-h-screen flex-col overflow-hidden bg-[#07152e] text-white">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
+        <Image
+          src="/landing.png"
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover object-center"
+        />
+        <div className="absolute inset-0 bg-[#07152e]/55" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#07152e]/30 via-[#07152e]/35 to-[#07152e]/75" />
+      </div>
+
+      <header className="mx-auto flex w-full max-w-7xl items-center justify-between px-5 py-5 sm:px-8 lg:px-10">
+        <div className="flex items-center gap-3">
+          <Logo size="md" priority />
+          <div>
+            <p className="text-sm font-semibold tracking-tight text-white">StockFlow</p>
+            <p className="text-xs text-slate-400">Inventory, clearly managed.</p>
+          </div>
+        </div>
+        <span className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-300 sm:inline-flex">
+          Built for independent shops
+        </span>
+      </header>
+
+      <section className="mx-auto flex w-full max-w-7xl flex-1 flex-col items-center gap-9 px-4 py-6 sm:gap-12 sm:px-8 sm:py-10 md:grid md:grid-cols-[minmax(0,1fr)_minmax(340px,440px)] md:items-center md:gap-10 md:py-14 lg:px-10">
+        <div className="order-2 w-full max-w-2xl md:order-1">
+          <p className="inline-flex items-center gap-2 rounded-full border border-blue-300/20 bg-blue-400/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-blue-200">
+            <span className="h-1.5 w-1.5 rounded-full bg-blue-400 shadow-[0_0_12px_rgba(96,165,250,0.9)]" />
+            Inventory that adds up
+          </p>
+          <h1 className="mt-6 max-w-xl text-4xl font-semibold leading-[1.08] tracking-tight text-white sm:text-5xl lg:text-6xl">
+            Know your stock.
+            <span className="block text-blue-300">Know your profit.</span>
           </h1>
-          <p className="mt-3 text-base leading-7 text-slate-600 sm:text-lg">
-            Inventory and sales management for small auto parts shops. Track
-            stock batches, prices, and profit from the parts you actually sell.
+          <p className="mt-6 max-w-xl text-base leading-7 text-slate-300 sm:text-lg sm:leading-8">
+            Keep batches, sales, expenses, and shop performance in one clear
+            place. StockFlow helps your team make confident decisions from the
+            numbers that matter.
+          </p>
+
+          <div className="mt-7 hidden max-w-xl gap-3 md:grid md:grid-cols-1 lg:mt-9 lg:grid-cols-3">
+            <Feature title="Batch-aware stock" detail="Keep each arrival and price distinct." />
+            <Feature title="Accurate profit" detail="Use the real batch cost and sale price." />
+            <Feature title="Shop-level access" detail="Your team's data stays yours." />
+          </div>
+
+          <p className="mt-8 hidden text-xs text-slate-500 md:block">
+            Secure access for shop owners and their teams
           </p>
         </div>
 
-        <Link
-          href="/login"
-          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-6 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950"
-        >
-          Sign in
-        </Link>
-
-        <dl className="mt-10 grid max-w-3xl grid-cols-1 gap-6 text-left sm:grid-cols-3">
-          <div className="rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
-            <dt className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-              Batch inventory
-            </dt>
-            <dd className="mt-2 text-sm leading-6 text-slate-600">
-              New arrivals create new batches at their own price — older stock
-              is never repriced after the fact.
-            </dd>
+        <section className="order-1 w-full max-w-md rounded-[1.5rem] border border-white/15 bg-slate-950/80 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.4)] backdrop-blur-xl sm:rounded-[2rem] sm:p-8 md:order-2 md:max-w-none">
+          <div className="mb-7">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">Welcome back</p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Sign in to StockFlow</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-400">Use your shop account to continue.</p>
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
-            <dt className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-              Sales &amp; profit
-            </dt>
-            <dd className="mt-2 text-sm leading-6 text-slate-600">
-              Every sale pulls from the exact batches it used, so profit is
-              calculated from what actually happened.
-            </dd>
-          </div>
+          {notice ? (
+            <p role="alert" className="mb-5 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-sm leading-6 text-amber-100">
+              {notice}
+            </p>
+          ) : null}
 
-          <div className="rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
-            <dt className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-              Team access
-            </dt>
-            <dd className="mt-2 text-sm leading-6 text-slate-600">
-              Shop owners control who can record sales and who can only view
-              them, with a two-assistant limit per shop.
-            </dd>
-          </div>
-        </dl>
-      </div>
+          <LoginForm blocked={blockedRole} />
 
-      {/* mt-auto pins the credit to the bottom on a tall screen, since the
-          content column above it is not full height. */}
-      <Credit className="mt-auto px-6 pb-8" />
+          <div className="mt-6 flex items-center gap-3 text-xs text-slate-500">
+            <span className="h-px flex-1 bg-white/10" />
+            <span>Protected shop access</span>
+            <span className="h-px flex-1 bg-white/10" />
+          </div>
+        </section>
+      </section>
+
+      <footer className="mx-auto flex w-full max-w-7xl flex-col gap-2 px-5 pb-5 text-center text-xs text-slate-500 sm:px-8 md:flex-row md:items-center md:justify-between md:text-left lg:px-10">
+        <p>StockFlow · Inventory and sales management</p>
+        <Credit />
+      </footer>
     </main>
+  );
+}
+
+function Feature({ title, detail }: { title: string; detail: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.045] p-4 backdrop-blur-sm">
+      <p className="text-sm font-semibold text-slate-100">{title}</p>
+      <p className="mt-1.5 text-xs leading-5 text-slate-400">{detail}</p>
+    </div>
   );
 }
