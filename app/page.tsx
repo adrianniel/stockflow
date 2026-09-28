@@ -222,27 +222,11 @@ export default async function Home({
         </section>
       </div>
 
-      <section id="features" className="scroll-mt-24 px-4 py-16 sm:px-7 sm:py-20 lg:px-10">
+      <section id="features" className="scroll-mt-24 bg-[#f4ecdf] px-4 py-14 sm:px-7 sm:py-20 lg:px-10">
         <div className="mx-auto max-w-7xl">
-          <div className="relative isolate mb-10 min-h-[16rem] overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-100 sm:min-h-[19rem]">
-            <Image
-              src="/features.jpg"
-              alt=""
-              fill
-              sizes="(max-width: 768px) 100vw, 90vw"
-              className="-z-10 object-cover object-center"
-            />
-            <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-r from-white/95 via-white/75 to-white/20" />
-            <div className="relative flex min-h-[16rem] max-w-3xl flex-col justify-center p-6 sm:min-h-[19rem] sm:p-10 lg:p-12">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">From setup to reporting</p>
-              <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight text-slate-950 sm:text-4xl">A complete shop workflow, in one place.</h2>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-700 sm:text-base">
-                See how StockFlow supports the day-to-day work of a shop, from
-                adding products and receiving stock to recording sales and
-                reviewing net profit.
-              </p>
-            </div>
-          </div>
+          <h2 className="mb-7 text-2xl font-semibold leading-tight tracking-tight text-slate-950 sm:mb-9 sm:text-4xl">
+            A complete shop workflow, in one place.
+          </h2>
 
           <WorkflowStepper steps={workflows} />
 
@@ -290,9 +274,9 @@ export default async function Home({
             description="StockFlow is an inventory and profit management system for small businesses. It was designed around the real work of shops that need to track changing purchase costs, stock movement, sales, and daily operating expenses without losing the history behind their numbers."
           />
           <div className="mt-8 grid gap-4 md:grid-cols-3">
-            <AboutCard title="Keep each stock arrival clear" text="Products describe what an item is. Batches record what each arrival cost, when it came in, and how many units are still available." />
-            <AboutCard title="Record what really happened" text="Sales preserve actual prices and the batches they used. Payments, corrections, and expenses remain part of an understandable business history." />
-            <AboutCard title="Understand shop performance" text="Dashboards and reports bring together sales, stock, customer balances, collections, expenses, and net profit for the dates that matter." />
+            <AboutCard icon="stock" title="Keep each stock arrival clear" text="Products describe what an item is. Batches record what each arrival cost, when it came in, and how many units are still available." />
+            <AboutCard icon="record" title="Record what really happened" text="Sales preserve actual prices and the batches they used. Payments, corrections, and expenses remain part of an understandable business history." />
+            <AboutCard icon="performance" title="Understand shop performance" text="Dashboards and reports bring together sales, stock, customer balances, collections, expenses, and net profit for the dates that matter." />
           </div>
         </div>
       </section>
@@ -386,11 +370,49 @@ function SectionHeading({
   );
 }
 
-function AboutCard({ title, text }: { title: string; text: string }) {
+function AboutCard({
+  icon,
+  title,
+  text,
+}: {
+  icon: "stock" | "record" | "performance";
+  title: string;
+  text: string;
+}) {
   return (
     <article className="rounded-3xl border border-slate-200 bg-slate-50 p-5 sm:p-6">
+      <span className="mb-4 grid h-11 w-11 place-items-center rounded-2xl border border-blue-100 bg-blue-50 text-blue-700">
+        <AboutIcon name={icon} />
+      </span>
       <h3 className="text-base font-semibold tracking-tight text-slate-950">{title}</h3>
       <p className="mt-2 text-sm leading-6 text-slate-600">{text}</p>
     </article>
+  );
+}
+
+function AboutIcon({ name }: { name: "stock" | "record" | "performance" }) {
+  if (name === "stock") {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+        <path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z" />
+        <path d="M12 12v9m8-13.5-8 4.5-8-4.5M8 5.3l8 4.6" />
+      </svg>
+    );
+  }
+
+  if (name === "record") {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+        <path d="M8 4h8a2 2 0 0 1 2 2v14H6V6a2 2 0 0 1 2-2Z" />
+        <path d="M9 4.5V3h6v1.5M9 11h6m-6 4h3m3 1 1.5 1.5L20 14" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+      <path d="M4 20V11m5 9V5m5 15v-7m5 7V8m-17 12h20" />
+      <path d="m3 8 5-4 5 3 7-5" />
+    </svg>
   );
 }

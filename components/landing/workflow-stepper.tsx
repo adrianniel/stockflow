@@ -40,7 +40,7 @@ export function WorkflowStepper({ steps }: { steps: WorkflowStep[] }) {
   const current = steps[activeStep];
 
   return (
-    <div className="mt-9 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_20px_65px_rgba(15,23,42,0.08)] sm:mt-10 sm:rounded-[2rem]">
+    <div className="mt-9 overflow-hidden rounded-[1.75rem] border border-slate-100 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.16)] sm:mt-10 sm:rounded-[2rem]">
       <div className="flex flex-col items-stretch gap-3 border-b border-white/10 bg-gradient-to-r from-[#07152e] via-[#0b1c3b] to-[#07152e] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-7 sm:py-5">
         <p className="shrink-0 text-xs font-semibold uppercase tracking-[0.15em] text-slate-300">
           {complete ? "Flow complete" : `Step ${activeStep + 1} of ${steps.length}`}
