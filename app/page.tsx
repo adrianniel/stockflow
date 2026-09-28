@@ -90,7 +90,8 @@ export default async function Home({
           </p>
         </div>
 
-        <section className="order-1 w-full max-w-md rounded-[1.5rem] border border-white/15 bg-slate-950/80 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.4)] backdrop-blur-xl sm:rounded-[2rem] sm:p-8 md:order-2 md:max-w-none">
+        <div className="signin-glow order-1 w-full max-w-md md:order-2 md:max-w-none">
+        <section className="relative z-10 w-full rounded-[1.5rem] border border-white/15 bg-slate-950/80 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.4)] backdrop-blur-xl sm:rounded-[2rem] sm:p-8">
           <div className="mb-7">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">Welcome back</p>
             <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Sign in to StockFlow</h2>
@@ -111,6 +112,7 @@ export default async function Home({
             <span className="h-px flex-1 bg-white/10" />
           </div>
         </section>
+        </div>
       </section>
 
       <footer className="mx-auto flex w-full max-w-7xl flex-col gap-2 px-5 pb-5 text-center text-xs text-slate-500 sm:px-8 md:flex-row md:items-center md:justify-between md:text-left lg:px-10">
