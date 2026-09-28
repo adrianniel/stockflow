@@ -128,8 +128,10 @@ Before modifying existing code:
   `lib/updates/current-release.ts`.
 - When publishing a new update announcement, change its `id` so browsers can
   recognize the new release, then update the landing and account bullet lists.
-- Announcements use browser `localStorage` for once-per-local-day reminders,
-  the five-day display limit, and the permanent “Don’t show this again” choice.
+- Announcements use browser `localStorage` for a shared five-local-day campaign
+  window and the permanent “Don’t show this again” choice. Show the relevant
+  landing or account message on every visit during that window; closing with X
+  only dismisses the current display.
 - Do not add announcement preferences or display bookkeeping to Supabase or
   change business records for announcement UI.
 - Keep the public landing and signed-in account messages distinct; keep copy

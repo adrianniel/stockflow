@@ -225,8 +225,9 @@ export default async function Home({
 
       <section id="features" className="scroll-mt-24 bg-[#f4ecdf] px-4 py-14 sm:px-7 sm:py-20 lg:px-10">
         <div className="mx-auto max-w-7xl">
-          <h2 className="mb-7 text-2xl font-semibold leading-tight tracking-tight text-slate-950 sm:mb-9 sm:text-4xl">
-            A complete shop workflow, in one place.
+          <h2 className="mb-7 max-w-4xl text-[2rem] font-semibold leading-[1.08] tracking-[-0.04em] text-[#07152e] sm:mb-9 sm:text-5xl lg:text-6xl">
+            A complete shop workflow,
+            <span className="block font-medium text-blue-700">in one place.</span>
           </h2>
 
           <WorkflowStepper steps={workflows} />
@@ -234,7 +235,7 @@ export default async function Home({
           <div className="mt-12 rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-[0_16px_55px_rgba(15,23,42,0.06)] sm:mt-14 sm:rounded-[2rem] sm:p-8 lg:p-10">
             <div className="max-w-2xl">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">What StockFlow helps you manage</p>
-              <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950 sm:mt-3 sm:text-3xl">The tools behind the workflow</h3>
+              <h3 className="mt-2 text-[clamp(1.3rem,4vw,2.15rem)] font-semibold leading-tight tracking-[-0.035em] text-slate-950 sm:mt-3">The tools behind the workflow</h3>
             </div>
             <div className="mt-5 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:mt-8 sm:gap-4">
               {capabilities.map((item, index) => (
@@ -255,7 +256,7 @@ export default async function Home({
         <div className="mx-auto flex max-w-7xl flex-col gap-5 rounded-[2rem] border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-sky-50 p-6 sm:p-9 md:flex-row md:items-center md:justify-between lg:p-12">
           <div className="max-w-2xl">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">For shop owners</p>
-            <h2 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">Want to bring your shop onto StockFlow?</h2>
+            <h2 className="mt-3 text-[clamp(1.45rem,4.5vw,2.35rem)] font-semibold leading-tight tracking-[-0.035em] text-slate-950">Want to bring your shop onto StockFlow?</h2>
             <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">
               Tell me a little about your business and what you need from an
               inventory system. Get in touch to discuss registering your shop.
@@ -303,7 +304,7 @@ export default async function Home({
           </div>
           <div className="flex flex-col justify-center p-6 text-white sm:p-9 lg:p-12">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-200">Meet the creator</p>
-            <h2 className="mt-3 text-3xl font-semibold tracking-tight text-white">Niel Adrian Garig</h2>
+            <h2 className="mt-3 text-[clamp(1.8rem,5vw,2.75rem)] font-semibold leading-tight tracking-[-0.04em] text-white">Niel Adrian Garig</h2>
             <p className="mt-2 text-sm font-medium text-blue-100/75">Computer Science student · BISU Bilar Campus</p>
             <div className="mt-6 space-y-4 text-sm leading-7 text-slate-200 sm:text-base">
               <p>
@@ -334,7 +335,7 @@ export default async function Home({
         <div className="mx-auto flex max-w-7xl flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-300">Contact and shop registration</p>
-            <h2 className="mt-2 text-xl font-semibold tracking-tight sm:text-2xl">Let’s talk about what your shop needs.</h2>
+            <h2 className="mt-2 text-[clamp(1.4rem,4vw,2.1rem)] font-semibold leading-tight tracking-[-0.035em]">Let’s talk about what your shop needs.</h2>
             <a className="mt-2 inline-block break-all text-sm text-blue-200 underline decoration-blue-200/40 underline-offset-4 hover:text-white" href={`mailto:${CONTACT_EMAIL}`}>
               {CONTACT_EMAIL}
             </a>
@@ -367,7 +368,7 @@ function SectionHeading({
   return (
     <div className="max-w-3xl">
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">{eyebrow}</p>
-      <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight text-slate-950 sm:text-4xl">{title}</h2>
+      <h2 className="mt-3 text-[clamp(1.8rem,5vw,3.25rem)] font-semibold leading-[1.1] tracking-[-0.04em] text-slate-950">{title}</h2>
       <p className="mt-4 text-sm leading-7 text-slate-600 sm:text-base">{description}</p>
     </div>
   );

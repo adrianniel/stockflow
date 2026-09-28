@@ -6,7 +6,6 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { CURRENT_RELEASE } from "@/lib/updates/current-release";
 
 type AnnouncementAudience = "landing" | "account";
-type ReminderState = { firstShownDate: string; shownDates: string[] };
 
 const MAX_SHOW_DAYS = 5;
 const STORAGE_PREFIX = "stockflow-update-announcement";
@@ -23,29 +22,11 @@ function calendarDayNumber(dateKey: string): number {
   return Date.UTC(year, month - 1, day) / 86_400_000;
 }
 
-function getReminderState(key: string): ReminderState | null {
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<ReminderState>;
-    if (
-      typeof parsed.firstShownDate !== "string" ||
-      !Array.isArray(parsed.shownDates) ||
-      !parsed.shownDates.every((date) => typeof date === "string")
-    ) {
-      return null;
-    }
-    return { firstShownDate: parsed.firstShownDate, shownDates: parsed.shownDates };
-  } catch {
-    return null;
-  }
-}
-
 export function UpdateAnnouncement({ audience }: { audience: AnnouncementAudience }) {
   const [visible, setVisible] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
   const reduceMotion = useReducedMotion();
-  const preferenceKey = `${STORAGE_PREFIX}:${CURRENT_RELEASE.id}:${audience}`;
+  const campaignStartKey = `${STORAGE_PREFIX}:${CURRENT_RELEASE.id}:first-shown`;
   const permanentDismissalKey = `${STORAGE_PREFIX}:${CURRENT_RELEASE.id}:dismissed`;
 
   useEffect(() => {
@@ -55,21 +36,18 @@ export function UpdateAnnouncement({ audience }: { audience: AnnouncementAudienc
       try {
         if (window.localStorage.getItem(permanentDismissalKey) === "true") return;
 
-        const reminder = getReminderState(preferenceKey);
-        if (reminder?.shownDates.includes(today)) return;
-        if (reminder && reminder.shownDates.length >= MAX_SHOW_DAYS) return;
-        if (
-          reminder &&
-          calendarDayNumber(today) - calendarDayNumber(reminder.firstShownDate) >= MAX_SHOW_DAYS
-        ) {
-          return;
+        let campaignStart = window.localStorage.getItem(campaignStartKey);
+        if (!campaignStart) {
+          campaignStart = today;
+          window.localStorage.setItem(campaignStartKey, campaignStart);
         }
 
-        const nextReminder: ReminderState = {
-          firstShownDate: reminder?.firstShownDate ?? today,
-          shownDates: [...new Set([...(reminder?.shownDates ?? []), today])],
-        };
-        window.localStorage.setItem(preferenceKey, JSON.stringify(nextReminder));
+        const elapsedDays = calendarDayNumber(today) - calendarDayNumber(campaignStart);
+        if (elapsedDays >= MAX_SHOW_DAYS) return;
+        if (elapsedDays < 0) {
+          campaignStart = today;
+          window.localStorage.setItem(campaignStartKey, today);
+        }
       } catch {
         // Storage may be unavailable in private browsing. Still show the news
         // for this visit; the close button remains usable for the current mount.
@@ -80,7 +58,7 @@ export function UpdateAnnouncement({ audience }: { audience: AnnouncementAudienc
     }, 180);
 
     return () => window.clearTimeout(timer);
-  }, [permanentDismissalKey, preferenceKey]);
+  }, [campaignStartKey, permanentDismissalKey]);
 
   useEffect(() => {
     if (!visible) return;
@@ -143,8 +121,8 @@ export function UpdateAnnouncement({ audience }: { audience: AnnouncementAudienc
               <button
                 ref={closeRef}
                 type="button"
-                aria-label="Close announcement for today"
-                title="Close for today"
+                aria-label="Close announcement"
+                title="Close announcement"
                 onClick={() => setVisible(false)}
                 className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-xl border border-white/15 bg-white/[0.08] text-slate-200 transition hover:bg-white/[0.16] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-300 sm:right-6 sm:top-6"
               >
