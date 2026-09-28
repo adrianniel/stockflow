@@ -33,6 +33,8 @@ export function DashboardSidebar({ items, profile }: DashboardSidebarProps) {
   const shopRole = profile.shop_name
     ? `${profile.shop_name} · ${ROLE_NAMES[profile.role]}`
     : ROLE_NAMES[profile.role];
+  const activeItem = items.find((item) => isActive(pathname, item.href));
+  const activeLabel = activeItem?.label ?? "Dashboard";
 
   if (openedAt !== pathname) {
     setOpenedAt(pathname);
@@ -82,9 +84,13 @@ export function DashboardSidebar({ items, profile }: DashboardSidebarProps) {
             onClick={() => setOpen((value) => !value)}
             aria-expanded={open}
             aria-controls="dashboard-navigation"
-            aria-label={open ? "Close navigation menu" : "Open navigation menu"}
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-white/20 bg-white/[0.08] text-white transition hover:border-white/30 hover:bg-white/[0.15] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-300"
+            aria-label={`${activeLabel}; ${open ? "close" : "open"} navigation menu`}
+            className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-2.5 rounded-2xl border border-white/20 bg-white/[0.08] px-3 text-white transition hover:border-white/30 hover:bg-white/[0.15] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-300"
           >
+            <span className="max-w-28 truncate text-xs font-bold tracking-wide text-white sm:text-sm">
+              {activeLabel}
+            </span>
+            <span aria-hidden="true" className="h-5 w-px bg-white/20" />
             {open ? <CloseIcon /> : <MenuIcon />}
           </button>
         </div>
@@ -142,10 +148,10 @@ export function DashboardSidebar({ items, profile }: DashboardSidebarProps) {
                       href={item.href}
                       onClick={() => setOpen(false)}
                       aria-current={active ? "page" : undefined}
-                      className={`flex min-h-11 items-center rounded-xl px-4 py-2.5 text-sm font-medium transition ${
+                      className={`flex min-h-11 items-center rounded-xl px-4 py-2.5 text-sm transition ${
                         active
-                          ? "bg-[#07152e] text-white shadow-sm"
-                          : "text-slate-700 hover:bg-white/75 hover:text-slate-950"
+                          ? "bg-[#07152e] font-bold text-white shadow-sm"
+                          : "font-medium text-slate-700 hover:bg-white/75 hover:text-slate-950"
                       }`}
                     >
                       {item.label}
