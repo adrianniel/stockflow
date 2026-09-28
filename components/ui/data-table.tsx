@@ -70,13 +70,13 @@ export function DataTable<Row>({
         className={cn("w-full border-collapse text-left text-sm", minWidth)}
       >
         <thead>
-          <tr className="border-b border-slate-200">
+          <tr className="border-b border-slate-200 bg-[#f8fafc]">
             {columns.map((column) => (
               <th
                 key={column.header}
                 scope="col"
                 className={cn(
-                  "px-2 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 md:px-3",
+                  "px-2 py-2.5 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-slate-600 sm:px-3 sm:py-3 sm:text-xs sm:tracking-[0.16em]",
                   column.align === "right" && "text-right",
                   column.hideOnMobile && "hidden md:table-cell",
                 )}
@@ -91,13 +91,13 @@ export function DataTable<Row>({
           {rows.map((row) => (
             <tr
               key={rowKey(row)}
-              className="border-b border-slate-100 last:border-0 transition hover:bg-slate-50"
+              className="border-b border-slate-100 last:border-0 transition hover:bg-blue-50/60"
             >
               {columns.map((column) => (
                 <td
                   key={column.header}
                   className={cn(
-                    "px-2 py-4 align-middle text-slate-700 md:px-3",
+                    "px-2 py-3 align-middle text-xs text-slate-700 sm:px-3 sm:py-4 sm:text-sm",
                     column.align === "right" && "text-right",
                     column.hideOnMobile && "hidden md:table-cell",
                   )}

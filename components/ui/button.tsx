@@ -10,10 +10,10 @@ const BASE =
   "inline-flex items-center justify-center gap-2 rounded-2xl font-medium transition disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950";
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary: "bg-slate-950 text-white hover:bg-slate-800 shadow-sm",
+  primary: "bg-blue-600 text-white hover:bg-blue-700 shadow-sm",
   secondary:
-    "border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-950",
-  ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-950",
+    "border border-blue-100 bg-white text-[#07152e] hover:bg-blue-50 hover:text-slate-950",
+  ghost: "text-slate-700 hover:bg-[#f4ecdf] hover:text-slate-950",
   danger: "bg-rose-600 text-white hover:bg-rose-700 shadow-sm",
 };
 
