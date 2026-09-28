@@ -246,16 +246,19 @@ export default async function Home({
 
           <WorkflowStepper steps={workflows} />
 
-          <div className="mt-14 rounded-[2rem] bg-slate-950 px-5 py-8 text-white sm:px-8 sm:py-10 lg:px-12">
+          <div className="mt-12 rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-[0_16px_55px_rgba(15,23,42,0.06)] sm:mt-14 sm:rounded-[2rem] sm:p-8 lg:p-10">
             <div className="max-w-2xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-300">What StockFlow helps you manage</p>
-              <h3 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">The tools behind the workflow</h3>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">What StockFlow helps you manage</p>
+              <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950 sm:mt-3 sm:text-3xl">The tools behind the workflow</h3>
             </div>
-            <div className="mt-7 grid gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
-              {capabilities.map((item) => (
-                <article key={item.title} className="border-t border-white/15 pt-4">
-                  <h4 className="text-sm font-semibold text-white">{item.title}</h4>
-                  <p className="mt-2 text-sm leading-6 text-slate-300">{item.description}</p>
+            <div className="mt-5 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:mt-8 sm:gap-4">
+              {capabilities.map((item, index) => (
+                <article key={item.title} className="flex min-h-full flex-col rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-blue-50/70 p-3.5 transition duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_12px_30px_rgba(37,99,235,0.08)] sm:rounded-3xl sm:p-5 lg:p-6">
+                  <span className="grid h-7 w-7 place-items-center rounded-lg bg-blue-100 text-[0.65rem] font-bold text-blue-800 sm:h-8 sm:w-8 sm:rounded-xl sm:text-xs">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <h4 className="mt-3 text-[0.8rem] font-semibold leading-5 tracking-tight text-slate-950 sm:mt-4 sm:text-base sm:leading-6">{item.title}</h4>
+                  <p className="mt-1.5 text-xs leading-5 text-slate-600 sm:mt-2 sm:text-sm sm:leading-6">{item.description}</p>
                 </article>
               ))}
             </div>
