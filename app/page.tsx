@@ -250,7 +250,7 @@ export default async function Home({
         </div>
       </section>
 
-      <section className="px-4 pb-16 sm:px-7 sm:pb-20 lg:px-10">
+      <section className="bg-[#f4ecdf] px-4 pb-16 sm:px-7 sm:pb-20 lg:px-10">
         <div className="mx-auto flex max-w-7xl flex-col gap-5 rounded-[2rem] border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-sky-50 p-6 sm:p-9 md:flex-row md:items-center md:justify-between lg:p-12">
           <div className="max-w-2xl">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">For shop owners</p>
