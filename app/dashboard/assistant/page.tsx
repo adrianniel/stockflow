@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
-import { StatCard } from "@/components/dashboard/stat-card";
+import { DashboardMetricCard } from "@/components/dashboard/dashboard-metric-card";
 import { ButtonLink } from "@/components/ui/button";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Panel, PanelHeader } from "@/components/ui/panel";
@@ -117,32 +117,36 @@ export default async function AssistantDashboard() {
         shopName={profile.shop_name}
       />
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
+      <section className="grid max-w-5xl grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
+        <DashboardMetricCard
           label="Today's sales"
           value={formatCurrency(summary.today.totalSales)}
-          delta={`${summary.today.saleCount} sale(s)`}
+          detail={`${summary.today.saleCount} sale(s)`}
+          graphic="sales"
         />
-        <StatCard
-           label="Today's net profit"
+        <DashboardMetricCard
+          label="Today's net profit"
           value={formatCurrency(summary.today.totalProfit)}
-          delta={`${summary.today.itemCount} unit(s) sold`}
+          detail={`${summary.today.itemCount} unit(s) sold`}
+          graphic="profit"
         />
-        <StatCard
+        <DashboardMetricCard
           label="Uncollected today"
           value={formatCurrency(summary.today.outstanding)}
-          delta={
+          detail={
             summary.today.outstanding > 0 ? "Credit or partial" : "All settled"
           }
+          graphic="credit"
         />
-        <StatCard
+        <DashboardMetricCard
           label="Units on hand"
           value={formatNumber(summary.inventory.quantityOnHand)}
-          delta={
+          detail={
             summary.inventory.outOfStockProducts > 0
               ? `${summary.inventory.outOfStockProducts} product(s) out`
               : "All stocked"
           }
+          graphic="stock"
         />
       </section>
 

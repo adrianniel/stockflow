@@ -24,31 +24,25 @@ export function DashboardHeader({
   shopName,
 }: DashboardHeaderProps) {
   return (
-    <header className="rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur md:p-6">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <p className="text-sm font-medium text-slate-500">
-            {shopName ? (
-              <>
-                <span className="text-slate-900">{shopName}</span>
-                <span className="px-2 text-slate-300">·</span>
-              </>
-            ) : null}
-            {roleLabel(role)}
-          </p>
-          <div className="mt-2 flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-950 md:text-3xl">
+    <header className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-[0_10px_32px_rgba(15,23,42,0.06)] sm:rounded-3xl sm:p-5 lg:p-6">
+      <p className="sr-only">
+        {shopName ? `${shopName} · ` : ""}{roleLabel(role)}
+      </p>
+      <div className="flex items-center justify-between gap-3 sm:gap-5">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <h1 className="text-xl font-semibold tracking-tight text-[#07152e] sm:text-2xl lg:text-3xl">
               {title}
             </h1>
-            <Badge>{role}</Badge>
+            <span className="sm:hidden"><Badge>{role}</Badge></span>
           </div>
-          <p className="mt-2 max-w-2xl text-sm text-slate-500">
+          <p className="mt-1.5 max-w-2xl text-xs leading-5 text-slate-600 sm:mt-2 sm:text-sm sm:leading-6">
             {subtitle}
           </p>
         </div>
 
-        <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-950 text-sm font-semibold text-white">
+        <div className="hidden min-w-0 shrink-0 items-center gap-3 rounded-2xl border border-blue-100 bg-[#eff6ff] px-3 py-2.5 sm:flex sm:max-w-[14rem] lg:max-w-[18rem]">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#07152e] text-xs font-semibold text-white sm:h-10 sm:w-10 sm:text-sm">
             {userName
               .split(" ")
               .map((part) => part[0])
@@ -58,10 +52,10 @@ export function DashboardHeader({
           </div>
 
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-slate-950">
+            <p className="truncate text-xs font-semibold text-slate-950 sm:text-sm">
               {userName}
             </p>
-            <p className="truncate text-xs text-slate-500">{userEmail}</p>
+            <p className="truncate text-[0.68rem] text-slate-500 sm:text-xs">{userEmail}</p>
           </div>
         </div>
       </div>

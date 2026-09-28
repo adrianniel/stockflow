@@ -1,5 +1,5 @@
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
-import { StatCard } from "@/components/dashboard/stat-card";
+import { CompactStatCard } from "@/components/dashboard/compact-stat-card";
 import { Panel, PanelHeader } from "@/components/ui/panel";
 import { requireRole } from "@/lib/auth/guards";
 import { getDashboardIdentity } from "@/lib/dashboard/identity";
@@ -56,41 +56,44 @@ export default async function InventoryPage() {
     <>
       <DashboardHeader
         title="Inventory"
-        subtitle="What is on the shelf, and what it is worth."
+        subtitle="Receive stock and review what is currently on your shelves."
         userName={displayName}
         userEmail={displayEmail}
         role={profile.role}
         shopName={profile.shop_name}
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <StatCard
-          label="Units on hand"
-          value={formatNumber(totalUnits)}
-          delta={`${inventory.length} product(s)`}
-        />
-        <StatCard
-          label="Stock value"
-          value={formatCurrency(totalValue)}
-          delta="At capital price"
-        />
-        <StatCard
-          label="Out of stock"
-          value={formatNumber(outOfStock)}
-          delta={outOfStock === 0 ? "All stocked" : "Needs reordering"}
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-stretch sm:gap-4">
+        <div className="grid min-w-0 grid-cols-3 gap-2 sm:gap-3">
+          <CompactStatCard
+            label="Units on hand"
+            value={formatNumber(totalUnits)}
+            detail={`${inventory.length} products`}
+          />
+          <CompactStatCard
+            label="Stock value"
+            value={formatCurrency(totalValue)}
+            detail="At cost"
+          />
+          <CompactStatCard
+            label="Out of stock"
+            value={formatNumber(outOfStock)}
+            detail={outOfStock === 0 ? "All stocked" : "Needs stock"}
+            tone={outOfStock > 0 ? "warning" : "positive"}
+          />
+        </div>
+        <ReceiveStockDialog
+          products={productOptions}
+          defaultInterest={defaultInterest}
+          triggerLabel="Receive stock"
+          triggerClassName="min-h-12 w-full px-5 py-3 text-sm font-semibold shadow-md shadow-blue-950/15 sm:h-full sm:w-auto sm:min-w-40"
         />
       </div>
 
       <Panel>
         <PanelHeader
           title="Stock by product"
-          description="Selling price shown is the oldest batch in stock — the one the next sale will draw from."
-          actions={
-            <ReceiveStockDialog
-              products={productOptions}
-              defaultInterest={defaultInterest}
-            />
-          }
+          description="Search, filter, and review batch availability. Selling price is the oldest batch in stock—the one the next sale will draw from."
         />
 
         <InventoryBrowser

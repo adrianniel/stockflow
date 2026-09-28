@@ -18,6 +18,7 @@ type ReceiveStockDialogProps = {
   /** Pre-selected and locked when opened from a product's own page. */
   fixedProductId?: string;
   triggerLabel?: string;
+  triggerClassName?: string;
 };
 
 /**
@@ -32,13 +33,18 @@ export function ReceiveStockDialog({
   defaultInterest,
   fixedProductId,
   triggerLabel = "Receive stock",
+  triggerClassName,
 }: ReceiveStockDialogProps) {
   const [open, setOpen] = useState(false);
   const disabled = products.length === 0;
 
   return (
     <>
-      <Button onClick={() => setOpen(true)} disabled={disabled}>
+      <Button
+        onClick={() => setOpen(true)}
+        disabled={disabled}
+        className={triggerClassName}
+      >
         {triggerLabel}
       </Button>
 

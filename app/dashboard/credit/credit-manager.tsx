@@ -94,7 +94,7 @@ export function CreditManager({ customers, canManage }: CreditManagerProps) {
         <div className="flex items-center justify-end gap-1">
           <ButtonLink
             href={`/dashboard/credit/${row.id}`}
-            variant="ghost"
+            variant={row.outstanding > 0 ? "primary" : "ghost"}
             size="sm"
           >
             {row.outstanding > 0 ? "Collect" : "View"}

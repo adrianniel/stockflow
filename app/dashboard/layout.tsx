@@ -6,6 +6,7 @@ import { Credit } from "@/components/ui/credit";
 import { requireSession } from "@/lib/auth/guards";
 import { navigationForRole } from "@/lib/auth/roles";
 import { getCurrentUser, getUserProfile } from "@/lib/supabase/auth.server";
+import { UpdateAnnouncement } from "@/components/updates/update-announcement";
 
 /**
  * Puts the shop's name in the browser tab, so a tab reads "Sales | Kang Auto
@@ -54,29 +55,19 @@ export default async function DashboardLayout({
   const profile = await requireSession();
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-950">
-      {/*
-        No top padding below `md`: the sidebar's mobile bar is sticky and sits
-        flush against the top edge, the way an app header does. From `md` up the
-        bar is gone and the usual padding applies on all sides.
-      */}
-      <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col gap-6 px-4 pb-4 md:flex-row md:p-6 lg:p-8">
-        <DashboardSidebar
-          items={navigationForRole(profile.role)}
-          profile={profile}
-        />
+    <div className="min-h-screen bg-[#f4ecdf] text-slate-950">
+      <DashboardSidebar
+        items={navigationForRole(profile.role)}
+        profile={profile}
+      />
 
-        <main className="flex min-w-0 flex-1 flex-col gap-6">
+      <div className="mx-auto min-h-screen max-w-[1600px] px-3 pb-4 pt-[calc(76px+0.75rem)] sm:px-5 sm:pb-6 sm:pt-[calc(76px+1.25rem)] lg:px-8">
+        <main className="flex min-w-0 flex-col gap-4 sm:gap-5">
           {children}
-
-          {/*
-            Sits at the end of the content column rather than in the sidebar so
-            it appears once per page, below the work, on both phone and desktop.
-            mt-auto keeps it at the bottom on pages too short to fill the screen.
-          */}
-          <Credit className="mt-auto pt-2" />
+          <Credit className="mt-auto py-2 text-center" />
         </main>
       </div>
+      <UpdateAnnouncement audience="account" />
     </div>
   );
 }

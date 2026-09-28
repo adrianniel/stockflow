@@ -65,13 +65,17 @@ export function LoginForm({ blocked }: LoginFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-5">
+    <form
+      onSubmit={handleSubmit(onSubmit)}
+      className="mt-8 space-y-5 [&_label]:text-slate-300 [&_input]:border-white/10 [&_input]:bg-slate-900 [&_input]:text-white [&_input]:placeholder:text-slate-500"
+    >
       <Field label="Email" htmlFor="email" error={errors.email?.message}>
         <Input
           id="email"
           type="email"
           autoComplete="email"
           placeholder="you@shop.com"
+          className="focus:border-blue-400 focus:ring-blue-400/20"
           aria-invalid={errors.email ? true : undefined}
           {...register("email", { required: "Email is required" })}
         />
@@ -85,6 +89,7 @@ export function LoginForm({ blocked }: LoginFormProps) {
         <PasswordInput
           id="password"
           autoComplete="current-password"
+          className="focus:border-blue-400 focus:ring-blue-400/20"
           aria-invalid={errors.password ? true : undefined}
           {...register("password", { required: "Password is required" })}
         />
@@ -96,7 +101,11 @@ export function LoginForm({ blocked }: LoginFormProps) {
         </p>
       ) : null}
 
-      <Button type="submit" disabled={isSubmitting} className="w-full">
+      <Button
+        type="submit"
+        disabled={isSubmitting}
+        className="w-full !bg-blue-500 py-3 text-sm font-semibold text-white !shadow-[0_8px_24px_rgba(59,130,246,0.35)] hover:!bg-blue-400 active:!bg-blue-600 focus-visible:outline-blue-300"
+      >
         {isSubmitting ? "Signing in..." : "Sign in"}
       </Button>
     </form>

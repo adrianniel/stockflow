@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 
 import { LogoutButton } from "@/components/dashboard/logout-button";
-import { Logo, Wordmark } from "@/components/ui/logo";
+import { Logo } from "@/components/ui/logo";
 import type { NavItem, SessionProfile } from "@/lib/auth/roles";
 
 type DashboardSidebarProps = {
@@ -13,238 +14,160 @@ type DashboardSidebarProps = {
   profile: SessionProfile;
 };
 
+const ROLE_NAMES: Record<SessionProfile["role"], string> = {
+  SUPER_ADMIN: "Super Admin",
+  OWNER: "Shop Owner",
+  ASSISTANT: "Assistant",
+};
+
 function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-/**
- * Navigation for every dashboard page, in two forms.
- *
- * On `md` and up this is the fixed left sidebar. Below that the same links move
- * into a slide-over drawer behind a top bar, because an owner has nine of them —
- * rendered inline on a phone they would fill the screen and push the page's own
- * content below the fold. Both forms are built from the shared Brand/NavLinks
- * pieces so a link only ever has to be added in one place.
- */
+/** Fixed StockFlow identity bar and role-filtered navigation drawer. */
 export function DashboardSidebar({ items, profile }: DashboardSidebarProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [openedAt, setOpenedAt] = useState(pathname);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const shopRole = profile.shop_name
+    ? `${profile.shop_name} · ${ROLE_NAMES[profile.role]}`
+    : ROLE_NAMES[profile.role];
 
-  // Tapping a link navigates but does not unmount this component, so the drawer
-  // has to be dismissed on every route change. Adjusting during render rather
-  // than from an effect avoids painting the open drawer over the new page for a
-  // frame first, and keying off the path covers the back button and any redirect
-  // a page performs, not just link taps.
   if (openedAt !== pathname) {
     setOpenedAt(pathname);
-
-    if (open) {
-      setOpen(false);
-    }
+    if (open) setOpen(false);
   }
 
-  // While the drawer covers the screen, the page behind it must not scroll —
-  // otherwise dragging on the backdrop moves the content underneath.
   useEffect(() => {
-    if (!open) {
-      return;
-    }
+    if (!open) return;
 
-    const previous = document.body.style.overflow;
+    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    // Focus starts inside the drawer so the keyboard and screen reader follow
-    // it open, and Escape closes it the way a dialog is expected to.
     closeButtonRef.current?.focus();
 
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
     }
 
-    window.addEventListener("keydown", handleKeyDown);
-
+    window.addEventListener("keydown", onKeyDown);
     return () => {
-      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
     };
   }, [open]);
-
-  const activeItem = items.find((item) => isActive(pathname, item.href));
 
   return (
     <>
-      {/*
-        The mobile bar is full-bleed and sticky so it behaves like an app header
-        rather than a card that scrolls away. The layout drops its top padding
-        below `md` to let this sit flush against the top edge.
-      */}
-      <div className="sticky top-0 z-30 -mx-4 flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 md:hidden">
-        <Logo size="sm" />
-
-        <div className="min-w-0 flex-1">
-          <p
-            title={profile.shop_name ?? "StockFlow"}
-            className="truncate text-sm font-semibold tracking-tight text-slate-950"
+      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-[#07152e]/95 text-white shadow-[0_8px_32px_rgba(7,21,46,0.2)] backdrop-blur-xl">
+        <div className="mx-auto flex h-[76px] max-w-[1600px] items-center justify-between gap-3 px-3 sm:px-5 lg:px-8">
+          <Link
+            href="/dashboard"
+            className="flex min-w-0 items-center gap-3 rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-300"
           >
-            {profile.shop_name ?? "StockFlow"}
-          </p>
-          {activeItem ? (
-            <p className="truncate text-xs text-slate-500">{activeItem.label}</p>
-          ) : null}
-        </div>
+            <Logo size="md" />
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold tracking-tight text-white sm:text-base">StockFlow</span>
+              <span
+                title={shopRole}
+                className="block max-w-[min(70vw,28rem)] truncate text-[0.65rem] font-medium uppercase tracking-[0.1em] text-blue-100/75 sm:text-xs"
+              >
+                {shopRole}
+              </span>
+            </span>
+          </Link>
 
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          aria-expanded={open}
-          aria-label="Open navigation menu"
-          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 text-slate-700 transition hover:bg-slate-100 hover:text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950"
-        >
-          <MenuIcon />
-        </button>
-      </div>
-
-      {open ? (
-        <div className="fixed inset-0 z-40 md:hidden">
-          {/*
-            A button rather than a div so dismissing by tapping outside is
-            reachable by keyboard and announced, instead of being a click
-            handler on decoration.
-          */}
           <button
             type="button"
-            aria-label="Close navigation menu"
-            onClick={() => setOpen(false)}
-            className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm"
-          />
-
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="Dashboard navigation"
-            className="absolute inset-y-0 left-0 flex w-[min(20rem,85vw)] flex-col bg-white p-4 shadow-[0_30px_80px_rgba(15,23,42,0.35)]"
+            onClick={() => setOpen((value) => !value)}
+            aria-expanded={open}
+            aria-controls="dashboard-navigation"
+            aria-label={open ? "Close navigation menu" : "Open navigation menu"}
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-white/20 bg-white/[0.08] text-white transition hover:border-white/30 hover:bg-white/[0.15] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-300"
           >
-            <div className="flex items-start justify-between gap-3 border-b border-slate-200 pb-4">
-              <Brand profile={profile} />
-
-              <button
-                ref={closeButtonRef}
-                type="button"
-                onClick={() => setOpen(false)}
-                aria-label="Close navigation menu"
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950"
-              >
-                <CloseIcon />
-              </button>
-            </div>
-
-            <NavLinks items={items} pathname={pathname} className="mt-5" />
-
-            <div className="mt-auto pt-6">
-              <LogoutButton />
-            </div>
-          </div>
+            {open ? <CloseIcon /> : <MenuIcon />}
+          </button>
         </div>
-      ) : null}
+      </header>
 
-      <aside className="hidden flex-col rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur md:sticky md:top-6 md:flex md:h-[calc(100vh-3rem)] md:w-[280px] md:shrink-0 md:p-5">
-        <div className="border-b border-slate-200 pb-5">
-          <Brand profile={profile} />
-        </div>
+      <AnimatePresence>
+        {open ? (
+          <motion.div
+            className="fixed inset-0 z-40"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+          >
+            <button
+              type="button"
+              aria-label="Close navigation menu"
+              onClick={() => setOpen(false)}
+              className="absolute inset-0 bg-[#07152e]/45 backdrop-blur-[2px]"
+            />
 
-        <NavLinks items={items} pathname={pathname} className="mt-6 overflow-y-auto" />
+            <motion.aside
+              id="dashboard-navigation"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Dashboard navigation"
+              initial={{ x: "-100%", opacity: 0.8 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: "-100%", opacity: 0.8 }}
+              transition={{ type: "spring", stiffness: 320, damping: 34 }}
+              className="absolute bottom-0 left-0 top-[76px] flex w-[min(21rem,88vw)] flex-col border-r border-slate-200/80 bg-[#f4ecdf] p-4 shadow-[0_25px_80px_rgba(7,21,46,0.25)] sm:p-5"
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-slate-300/70 pb-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-800">Navigation</p>
+                  <p className="mt-1 max-w-[15rem] truncate text-xs text-slate-600">{shopRole}</p>
+                </div>
+                <button
+                  ref={closeButtonRef}
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="Close navigation menu"
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-300/80 bg-white/60 text-slate-700 transition hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+                >
+                  <CloseIcon />
+                </button>
+              </div>
 
-        <div className="mt-auto pt-6">
-          <LogoutButton />
-        </div>
-      </aside>
+              <nav aria-label="Dashboard" className="mt-4 space-y-1 overflow-y-auto">
+                {items.map((item) => {
+                  const active = isActive(pathname, item.href);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setOpen(false)}
+                      aria-current={active ? "page" : undefined}
+                      className={`flex min-h-11 items-center rounded-xl px-4 py-2.5 text-sm font-medium transition ${
+                        active
+                          ? "bg-[#07152e] text-white shadow-sm"
+                          : "text-slate-700 hover:bg-white/75 hover:text-slate-950"
+                      }`}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </nav>
+
+              <div className="mt-auto border-t border-slate-300/70 pt-4">
+                <LogoutButton />
+              </div>
+            </motion.aside>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </>
-  );
-}
-
-/**
- * For a shop member the store's own name is the identity of this space, so it
- * takes the primary line and StockFlow steps back to the tagline. SUPER_ADMIN
- * belongs to no shop and keeps the product branding.
- */
-function Brand({ profile }: { profile: SessionProfile }) {
-  if (!profile.shop_name) {
-    return <Wordmark tagline="Inventory management" />;
-  }
-
-  return (
-    <div className="flex items-center gap-3">
-      <Logo size="md" />
-      <div className="min-w-0">
-        <p
-          title={profile.shop_name}
-          className="truncate text-sm font-semibold tracking-tight text-slate-950"
-        >
-          {profile.shop_name}
-        </p>
-        <p className="truncate text-xs text-slate-500">StockFlow</p>
-      </div>
-    </div>
-  );
-}
-
-function NavLinks({
-  items,
-  pathname,
-  className,
-}: {
-  items: NavItem[];
-  pathname: string;
-  className?: string;
-}) {
-  return (
-    <nav aria-label="Dashboard" className={`space-y-1 ${className ?? ""}`}>
-      {items.map((item) => {
-        const active = isActive(pathname, item.href);
-
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={active ? "page" : undefined}
-            className={`flex items-center rounded-2xl px-4 py-3 text-sm font-medium transition ${
-              active
-                ? "bg-slate-950 text-white shadow-sm"
-                : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
-            }`}
-          >
-            {item.label}
-          </Link>
-        );
-      })}
-    </nav>
   );
 }
 
 function MenuIcon() {
   return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      strokeLinecap="round"
-      className="h-5 w-5"
-    >
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" className="h-5 w-5">
       <path d="M4 7h16M4 12h16M4 17h16" />
     </svg>
   );
@@ -252,16 +175,8 @@ function MenuIcon() {
 
 function CloseIcon() {
   return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      strokeLinecap="round"
-      className="h-4 w-4"
-    >
-      <path d="M6 6l12 12M18 6L6 18" />
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" className="h-5 w-5">
+      <path d="M6 6l12 12M18 6 6 18" />
     </svg>
   );
 }
