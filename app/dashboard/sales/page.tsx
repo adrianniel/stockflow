@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
-import { StatCard } from "@/components/dashboard/stat-card";
+import { CompactStatCard } from "@/components/dashboard/compact-stat-card";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { DataTable, type Column } from "@/components/ui/data-table";
@@ -99,38 +99,45 @@ export default async function SalesPage() {
     <>
       <DashboardHeader
         title="Sales"
-        subtitle="Every transaction recorded in your shop."
+        subtitle="Record a sale or review your shop’s recent transactions."
         userName={displayName}
         userEmail={displayEmail}
         role={profile.role}
         shopName={profile.shop_name}
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <StatCard
-          label="Today's sales"
-          value={formatCurrency(summary.today.totalSales)}
-          delta={`${summary.today.saleCount} sale(s)`}
-        />
-        <StatCard
-          label="Today's profit"
-          value={formatCurrency(summary.today.totalProfit)}
-          delta={`${summary.today.itemCount} unit(s) sold`}
-        />
-        <StatCard
-          label="Uncollected today"
-          value={formatCurrency(summary.today.outstanding)}
-          delta={
-            summary.today.outstanding > 0 ? "Credit or partial" : "All settled"
-          }
-        />
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-stretch sm:gap-4">
+        <div className="grid min-w-0 grid-cols-3 gap-2 sm:gap-3">
+          <CompactStatCard
+            label="Today's sales"
+            value={formatCurrency(summary.today.totalSales)}
+            detail={`${summary.today.saleCount} sales`}
+          />
+          <CompactStatCard
+            label="Net profit"
+            value={formatCurrency(summary.today.totalProfit)}
+            detail="Today after expenses"
+            tone={summary.today.totalProfit < 0 ? "warning" : "positive"}
+          />
+          <CompactStatCard
+            label="Uncollected"
+            value={formatCurrency(summary.today.outstanding)}
+            detail={summary.today.outstanding > 0 ? "Credit or partial" : "All settled"}
+            tone={summary.today.outstanding > 0 ? "warning" : "positive"}
+          />
+        </div>
+        <ButtonLink
+          href="/dashboard/sales/new"
+          className="min-h-12 w-full px-5 py-3 text-sm font-semibold shadow-md shadow-blue-950/15 sm:h-full sm:w-auto sm:min-w-36"
+        >
+          New sale
+        </ButtonLink>
       </div>
 
       <Panel>
         <PanelHeader
           title="Recent sales"
           description="The 50 most recent transactions, voided ones included. Open one to see the batches it drew from."
-          actions={<ButtonLink href="/dashboard/sales/new">New sale</ButtonLink>}
         />
 
         <DataTable

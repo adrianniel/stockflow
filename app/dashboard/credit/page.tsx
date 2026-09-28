@@ -1,5 +1,5 @@
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
-import { StatCard } from "@/components/dashboard/stat-card";
+import { CompactStatCard } from "@/components/dashboard/compact-stat-card";
 import { Panel } from "@/components/ui/panel";
 import { requireRole } from "@/lib/auth/guards";
 import { getDashboardIdentity } from "@/lib/dashboard/identity";
@@ -47,21 +47,23 @@ export default async function CreditPage() {
         shopName={profile.shop_name}
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <StatCard
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <CompactStatCard
           label="Total outstanding"
           value={formatCurrency(totalOutstanding)}
-          delta="Unpaid"
+          detail="Unpaid balance"
+          tone={totalOutstanding > 0 ? "warning" : "positive"}
         />
-        <StatCard
+        <CompactStatCard
           label="Customers owing"
           value={`${owing.length}`}
-          delta={`${customers.length} on file`}
+          detail={`${customers.length} on file`}
+          tone={owing.length > 0 ? "warning" : "positive"}
         />
-        <StatCard
+        <CompactStatCard
           label="Unpaid sales"
           value={`${customers.reduce((count, customer) => count + customer.unpaidSaleCount, 0)}`}
-          delta="To collect"
+          detail="To collect"
         />
       </div>
 

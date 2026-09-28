@@ -1,4 +1,5 @@
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
+import { CompactStatCard } from "@/components/dashboard/compact-stat-card";
 import { Panel, PanelHeader } from "@/components/ui/panel";
 import { requireRole } from "@/lib/auth/guards";
 import { getDashboardIdentity } from "@/lib/dashboard/identity";
@@ -64,17 +65,17 @@ export default async function InventoryPage() {
 
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-stretch sm:gap-4">
         <div className="grid min-w-0 grid-cols-3 gap-2 sm:gap-3">
-          <InventoryStatusCard
+          <CompactStatCard
             label="Units on hand"
             value={formatNumber(totalUnits)}
             detail={`${inventory.length} products`}
           />
-          <InventoryStatusCard
+          <CompactStatCard
             label="Stock value"
             value={formatCurrency(totalValue)}
             detail="At cost"
           />
-          <InventoryStatusCard
+          <CompactStatCard
             label="Out of stock"
             value={formatNumber(outOfStock)}
             detail={outOfStock === 0 ? "All stocked" : "Needs stock"}
@@ -101,38 +102,5 @@ export default async function InventoryPage() {
         />
       </Panel>
     </>
-  );
-}
-
-function InventoryStatusCard({
-  label,
-  value,
-  detail,
-  tone = "neutral",
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  tone?: "neutral" | "positive" | "warning";
-}) {
-  const valueColor =
-    tone === "warning"
-      ? "text-amber-700"
-      : tone === "positive"
-        ? "text-emerald-700"
-        : "text-[#07152e]";
-
-  return (
-    <article className="min-w-0 rounded-xl border border-slate-200 bg-white/90 px-2.5 py-2.5 shadow-[0_6px_20px_rgba(15,23,42,0.04)] sm:rounded-2xl sm:px-4 sm:py-3">
-      <p className="truncate text-[0.58rem] font-semibold uppercase leading-4 tracking-[0.08em] text-slate-500 sm:text-xs sm:tracking-[0.12em]">
-        {label}
-      </p>
-      <p title={value} className={`mt-1 truncate text-xs font-bold tracking-tight sm:text-lg ${valueColor}`}>
-        {value}
-      </p>
-      <p className="mt-0.5 truncate text-[0.6rem] leading-4 text-slate-500 sm:text-xs">
-        {detail}
-      </p>
-    </article>
   );
 }
