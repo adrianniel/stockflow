@@ -33,7 +33,7 @@ npm run dev
 
 ---
 
-## 2. Apply the pending migrations — required before anything works
+## 2. Apply migrations safely
 
 The migrations in `supabase/migrations/` are the **entire database**. The baseline
 was reconstructed from the live schema, and everything since (new columns, new
@@ -41,9 +41,9 @@ functions, RLS fixes) is a migration file. There is no migration log in the repo
 and the ones you applied by hand have already proven to be an unreliable record —
 `20260801120200` was skipped and the app broke with error `42703` on the OWNER
 pages, while `docs/verify-setup.sql` still printed all-PASS because it did not
-check that column. **Do not trust history. Apply the full chain in order, oldest
-first, then verify.** The files are all idempotent (`IF NOT EXISTS`,
-`DROP ... IF EXISTS`, `CREATE OR REPLACE`), so running one twice is harmless.
+check that column. Use both the remote migration history and schema verification;
+neither alone is enough if migrations were applied manually. Idempotent DDL does
+not make data backfills harmless to repeat.
 
 The table is a summary; a fresh project must run **every** file in
 `supabase/migrations/` in filename order.
@@ -65,7 +65,7 @@ The table is a summary; a fresh project must run **every** file in
 and every login: `requireSession()` selects `users.status`, so until that column
 exists nothing works at all.
 
-### Steps
+### Fresh Supabase project
 
 1. Open **Supabase dashboard → SQL Editor → New query**.
 2. Open the oldest file — `supabase/migrations/20260801120000_baseline_schema.sql`
@@ -78,11 +78,18 @@ exists nothing works at all.
 Every row of the verification query should read `PASS`. Any `FAIL` row names the
 migration that is missing and what breaks while it is.
 
-For an already-running project, back it up first, run the verification query,
-and apply only migrations that are actually missing. Do not replay the whole
-history on a live database just to install a new feature. The new
-`20261023000100` migration adds a nullable column and a function; it does not
-rewrite existing payment data.
+### Existing/live Supabase project
+
+1. Make and verify a backup before changing production.
+2. Run `npx supabase migration list --linked` and
+   `npx supabase db query --linked --file docs/verify-setup.sql`.
+3. Compare the remote state with the intended migration. If history is missing,
+   inconsistent, or older files appear pending, stop and inspect the schema;
+   do not run `supabase db push` or replay the whole chain blindly.
+4. Apply only the confirmed missing migration, then rerun the verification
+   query. For the customer-level credit update, migration
+   `20261023000100_customer_level_credit_payments.sql` is additive: it adds a
+   nullable column and a function without rewriting existing payment data.
 
 Note on `20260801120200`: if the shop has already recorded sales, the file
 backfills `amount_paid` from `payment_status` before adding its constraint, so
