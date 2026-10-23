@@ -193,6 +193,27 @@ export type SalePayment = {
   voided_at: string | null;
 };
 
+/** A credit-sale line shown in the customer's single consolidated item list. */
+export type CustomerCreditItem = SaleItem & {
+  sale_id: string;
+  sale_date: string | null;
+  seller_name: string | null;
+};
+
+/** One customer-level collection, possibly allocated across several sales. */
+export type CustomerPaymentGroup = {
+  id: string;
+  /** Original amount collected, including allocations later voided with a sale. */
+  amount: string;
+  /** Amount still counted against live, non-voided sales. */
+  applied_amount: string;
+  voided_amount: string;
+  collected_at: string;
+  created_at: string;
+  note: string | null;
+  collected_by_name: string | null;
+};
+
 /**
  * A person with a login for this shop, as the assistants page lists them.
  *

@@ -1,7 +1,6 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { Button, ButtonLink } from "@/components/ui/button";
@@ -51,12 +50,9 @@ export function CreditManager({ customers, canManage }: CreditManagerProps) {
       header: "Customer",
       cell: (row) => (
         <div className="min-w-0">
-          <Link
-            href={`/dashboard/credit/${row.id}`}
-            className="font-medium text-slate-950 underline-offset-4 hover:underline"
-          >
+          <p className="font-medium text-slate-950">
             {row.name}
-          </Link>
+          </p>
           {row.phone ? (
             <p className="truncate text-xs text-slate-500">{row.phone}</p>
           ) : null}
@@ -97,7 +93,7 @@ export function CreditManager({ customers, canManage }: CreditManagerProps) {
             variant={row.outstanding > 0 ? "primary" : "ghost"}
             size="sm"
           >
-            {row.outstanding > 0 ? "Collect" : "View"}
+            Open
           </ButtonLink>
 
           {canManage ? (
@@ -129,7 +125,7 @@ export function CreditManager({ customers, canManage }: CreditManagerProps) {
     <>
       <PanelHeader
         title="Customers"
-        description="Anyone who buys on credit. Tap a name to see their unpaid sales and record a payment."
+        description="Open a customer to see one combined list of their credited items, total balance, and payment history."
         actions={<Button onClick={() => setCreateOpen(true)}>New customer</Button>}
       />
 

@@ -1177,6 +1177,75 @@ export async function recordPayment(
   });
 }
 
+/**
+ * Records one customer-level payment and lets the database allocate it oldest
+ * outstanding sale first. The RPC performs the allocation and ledger inserts
+ * in one transaction so a partial failure cannot leave only part of a payment.
+ */
+export async function recordCustomerPayment(
+  _previous: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  return withShop(async () => {
+    const { supabase } = await getShopContext("OWNER", "ASSISTANT");
+    const errors = new FormErrors();
+    const customerId = readString(form, "customer_id");
+    const amount = requiredNumber(form, "amount", errors, {
+      label: "Amount",
+      min: 0.01,
+    });
+    const note = readOptionalString(form, "note");
+    const collectedAtRaw = readString(form, "collected_at");
+    let collectedAt: string | null = null;
+
+    if (!isUuid(customerId)) {
+      return failure("That customer could not be found.");
+    }
+
+    if (collectedAtRaw !== "") {
+      const hasTimezone = /(?:z|[+-]\d{2}:\d{2})$/i.test(collectedAtRaw);
+      const parsed = new Date(collectedAtRaw);
+
+      if (!hasTimezone || Number.isNaN(parsed.getTime())) {
+        errors.add("collected_at", "Enter a valid payment date and time.");
+      } else if (parsed.getTime() > Date.now() + 60_000) {
+        errors.add("collected_at", "The received date and time cannot be in the future.");
+      } else {
+        collectedAt = parsed.toISOString();
+      }
+    }
+
+    if (note !== null && note.length > 200) {
+      errors.add("note", "Note must be 200 characters or fewer.");
+    }
+
+    if (errors.hasErrors) {
+      return failure("Check the highlighted fields.", errors.all);
+    }
+
+    const { error } = await supabase.rpc("record_customer_payment", {
+      p_customer_id: customerId,
+      p_amount: money(amount),
+      p_collected_at: collectedAt,
+      p_note: note,
+    });
+
+    if (error) {
+      return databaseFailure(error, "Could not record the customer payment.");
+    }
+
+    revalidatePath("/dashboard/credit");
+    revalidatePath(`/dashboard/credit/${customerId}`);
+    revalidatePath("/dashboard/sales");
+    revalidatePath("/dashboard/reports");
+    revalidatePath("/dashboard/reports/[date]", "page");
+    revalidatePath("/dashboard/owner");
+    revalidatePath("/dashboard/assistant");
+
+    return success("Customer payment recorded.");
+  });
+}
+
 type VoidResult = {
   restored_units: number;
   restored_batches: number;

@@ -4,6 +4,8 @@ import type { ShopContext } from "./context";
 import type {
   Category,
   Customer,
+  CustomerCreditItem,
+  CustomerPaymentGroup,
   CustomerWithBalance,
   InventoryLine,
   PaymentStatus,
@@ -681,6 +683,98 @@ export async function listCustomerUnpaidSales(
   return ((data ?? []) as SaleRow[]).map(toSaleWithSeller);
 }
 
+/** All historical sales for one customer, including settled and voided rows. */
+export async function listCustomerCreditSales(
+  { supabase, shopId }: ShopContext,
+  customerId: string,
+): Promise<SaleWithSeller[]> {
+  const { data, error } = await supabase
+    .from("sales")
+    .select(SALE_SELECT)
+    .eq("shop_id", shopId)
+    .eq("customer_id", customerId)
+    .order("sale_date", { ascending: true, nullsFirst: true })
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return ((data ?? []) as SaleRow[]).map(toSaleWithSeller);
+}
+
+/**
+ * All item lines from live credit sales, fetched in one shop-RLS-scoped query.
+ * The sale IDs come from listCustomerCreditSales(), which explicitly scopes
+ * them to the authenticated shop before they are used here.
+ */
+export async function listCustomerCreditItems(
+  { supabase }: ShopContext,
+  sales: SaleWithSeller[],
+): Promise<CustomerCreditItem[]> {
+  if (sales.length === 0) {
+    return [];
+  }
+
+  const saleById = new Map(sales.map((sale) => [sale.id, sale]));
+  const { data, error } = await supabase
+    .from("sale_items")
+    .select(
+      `
+      id,
+      sale_id,
+      stock_batches ( product_id, batch_number, received_date, quantity_remaining, selling_price, products ( product_name ) ),
+      quantity,
+      capital_price,
+      suggested_price,
+      actual_selling_price,
+      profit,
+      stock_batch_id
+    `,
+    )
+    .in("sale_id", sales.map((sale) => sale.id))
+    .order("created_at");
+
+  if (error) {
+    throw error;
+  }
+
+  return ((data ?? []) as Array<SaleItemRow & { sale_id: string }>).flatMap(
+    (row) => {
+      const sale = saleById.get(row.sale_id);
+
+      // RLS protects sale_items through its parent sale; this extra guard keeps
+      // an unexpected relationship result from crossing shop boundaries.
+      if (!sale) {
+        return [];
+      }
+
+      const batch = one(row.stock_batches);
+
+      return [
+        {
+          id: row.id,
+          sale_id: row.sale_id,
+          sale_date: sale.sale_date,
+          seller_name: sale.seller_name,
+          product_id: batch?.product_id ?? null,
+          quantity: row.quantity,
+          capital_price: row.capital_price,
+          suggested_price: row.suggested_price,
+          actual_selling_price: row.actual_selling_price,
+          profit: row.profit,
+          stock_batch_id: row.stock_batch_id,
+          batch_number: batch?.batch_number ?? null,
+          batch_received_date: batch?.received_date ?? null,
+          product_name: one(batch?.products ?? null)?.product_name ?? null,
+          batch_quantity_remaining: batch?.quantity_remaining ?? null,
+          batch_selling_price: batch?.selling_price ?? null,
+        },
+      ];
+    },
+  );
+}
+
 type SalePaymentRow = {
   id: string;
   amount: string;
@@ -690,6 +784,88 @@ type SalePaymentRow = {
   voided_at: string | null;
   users: Embedded<{ name: string | null }>;
 };
+
+type CustomerPaymentRow = {
+  id: string;
+  payment_group_id: string | null;
+  sale_id: string;
+  amount: string;
+  collected_at: string;
+  created_at: string;
+  note: string | null;
+  voided_at: string | null;
+  users: Embedded<{ name: string | null }>;
+};
+
+/**
+ * Groups customer-level collection allocations into the one payment the staff
+ * entered. Legacy rows have no group id and remain individual history entries.
+ */
+export async function listCustomerPaymentGroups(
+  { supabase, shopId }: ShopContext,
+  sales: SaleWithSeller[],
+): Promise<CustomerPaymentGroup[]> {
+  if (sales.length === 0) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("sale_payments")
+    .select(
+      "id, payment_group_id, sale_id, amount, collected_at, created_at, note, voided_at, users ( name )",
+    )
+    .eq("shop_id", shopId)
+    .in("sale_id", sales.map((sale) => sale.id))
+    .order("collected_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  const grouped = new Map<
+    string,
+    CustomerPaymentGroup & { amountValue: number; appliedValue: number; voidedValue: number }
+  >();
+
+  for (const row of (data ?? []) as CustomerPaymentRow[]) {
+    const key = row.payment_group_id ?? row.id;
+    const entry = grouped.get(key) ?? {
+      id: key,
+      amount: "0",
+      applied_amount: "0",
+      voided_amount: "0",
+      collected_at: row.collected_at,
+      created_at: row.created_at,
+      note: row.note,
+      collected_by_name: one(row.users)?.name ?? null,
+      amountValue: 0,
+      appliedValue: 0,
+      voidedValue: 0,
+    };
+    const amount = toNumber(row.amount);
+
+    entry.amountValue += amount;
+    if (row.voided_at) {
+      entry.voidedValue += amount;
+    } else {
+      entry.appliedValue += amount;
+    }
+
+    grouped.set(key, entry);
+  }
+
+  return [...grouped.values()]
+    .map(({ amountValue, appliedValue, voidedValue, ...payment }) => ({
+      ...payment,
+      amount: amountValue.toFixed(2),
+      applied_amount: appliedValue.toFixed(2),
+      voided_amount: voidedValue.toFixed(2),
+    }))
+    .sort(
+      (a, b) =>
+        new Date(b.collected_at).getTime() - new Date(a.collected_at).getTime(),
+    );
+}
 
 /**
  * The instalments recorded against one sale.

@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
 
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { StatCard } from "@/components/dashboard/stat-card";
@@ -10,13 +9,12 @@ import { getDashboardIdentity } from "@/lib/dashboard/identity";
 import { shopContextFor } from "@/lib/shop/context";
 import {
   getCustomer,
-  listCustomerUnpaidSales,
-  listSaleItems,
-  listSalePayments,
+  listCustomerCreditItems,
+  listCustomerCreditSales,
+  listCustomerPaymentGroups,
 } from "@/lib/shop/queries";
 import {
   formatCurrency,
-  formatDate,
   toNumber,
 } from "@/lib/utils/format";
 
@@ -25,13 +23,8 @@ import { CollectionList } from "./collection-list";
 export const metadata = { title: "Customer credit" };
 
 /**
- * One customer's debt, and the form for taking money against it.
- *
- * Payments are recorded per sale rather than as one lump against the customer.
- * That is deliberate: profit is already attributed per sale, and a shop that
- * takes 500 off a 2,000 balance needs to know which sale is now settled — a
- * customer-level balance could not answer that without guessing an allocation.
- * Sales are listed oldest first, which is the order a shop collects in.
+ * One customer's consolidated credit account: all credited items, all-time
+ * totals, and one form for collecting against the combined outstanding balance.
  */
 export default async function CustomerCreditPage({
   params,
@@ -53,39 +46,22 @@ export default async function CustomerCreditPage({
     notFound();
   }
 
-  const unpaidSales = await listCustomerUnpaidSales(context, customer.id);
+  const allSales = await listCustomerCreditSales(context, customer.id);
+  const activeSales = allSales.filter((sale) => sale.voided_at === null);
+  const [items, payments] = await Promise.all([
+    listCustomerCreditItems(context, activeSales),
+    listCustomerPaymentGroups(context, allSales),
+  ]);
 
-  // Fetch each sale's instalment history and item details together. The number
-  // of open debts per customer is naturally small; avoid denormalizing a second
-  // aggregate that could drift from the sales and payment ledgers.
-  const detailsPerSale = await Promise.all(
-    unpaidSales.map(async (sale) => {
-      const [payments, items] = await Promise.all([
-        listSalePayments(context, sale.id),
-        listSaleItems(context, sale.id),
-      ]);
-
-      return { payments, items };
-    }),
-  );
-
-  const sales = unpaidSales.map((sale, index) => ({
-    id: sale.id,
-    saleDate: sale.sale_date,
-    sellerName: sale.seller_name,
-    total: toNumber(sale.total_amount),
-    paid: toNumber(sale.amount_paid),
-    paymentStatus: sale.payment_status,
-    payments: detailsPerSale[index].payments,
-    items: detailsPerSale[index].items,
-  }));
-
-  const outstanding = sales.reduce(
-    (total, sale) => total + (sale.total - sale.paid),
+  const totalCredit = activeSales.reduce(
+    (total, sale) => total + toNumber(sale.total_amount),
     0,
   );
-
-  const oldest = sales.length > 0 ? sales[0].saleDate : null;
+  const paid = activeSales.reduce(
+    (total, sale) => total + toNumber(sale.amount_paid),
+    0,
+  );
+  const outstanding = Math.max(totalCredit - paid, 0);
 
   return (
     <>
@@ -102,21 +78,21 @@ export default async function CustomerCreditPage({
         shopName={profile.shop_name}
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-3">
         <StatCard
-          label="Outstanding"
+          label="Total credited"
+          value={formatCurrency(totalCredit)}
+          delta={`${activeSales.length} credit sale${activeSales.length === 1 ? "" : "s"}`}
+        />
+        <StatCard
+          label="Paid so far"
+          value={formatCurrency(paid)}
+          delta="All payments received"
+        />
+        <StatCard
+          label="Balance due"
           value={formatCurrency(outstanding)}
-          delta={outstanding > 0 ? "To collect" : "Settled"}
-        />
-        <StatCard
-          label="Unpaid sales"
-          value={`${sales.length}`}
-          delta={sales.length > 0 ? "Oldest first" : "Nothing due"}
-        />
-        <StatCard
-          label="Owing since"
-          value={oldest ? formatDate(oldest) : "—"}
-          delta={oldest ? "First unpaid sale" : "No open debt"}
+          delta={outstanding > 0 ? "One payment can cover any amount up to this total" : "Settled"}
         />
       </div>
 
@@ -129,23 +105,10 @@ export default async function CustomerCreditPage({
         </Panel>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950">
-        <p>
-          Each record below is one unpaid sale. Product details and payment
-          history stay attached to that sale.
-        </p>
-        <Link
-          href="/dashboard/sales"
-          className="font-semibold underline decoration-blue-300 underline-offset-4 hover:decoration-blue-700"
-        >
-          Browse sales
-        </Link>
-      </div>
-
       <Panel>
         <PanelHeader
-          title="Unpaid sales"
-          description="Review the items and sale time before collecting. Record one or more payments; each is kept in this sale’s history."
+          title="Credit item list"
+          description="One combined history of the customer's credited products. Payments apply to the total balance, not individual items."
           actions={
             <ButtonLink href="/dashboard/credit" variant="secondary">
               Back to credit
@@ -153,7 +116,14 @@ export default async function CustomerCreditPage({
           }
         />
 
-        <CollectionList customerId={customer.id} sales={sales} />
+        <CollectionList
+          customerId={customer.id}
+          items={items}
+          payments={payments}
+          totalCredit={totalCredit}
+          paid={paid}
+          outstanding={outstanding}
+        />
       </Panel>
     </>
   );

@@ -747,6 +747,18 @@ reports use `sale_payments.collected_at`. A later payment therefore changes the
 collection day without changing the original sale date. `amount_paid` and
 `payment_status` remain trigger-derived.
 
+On the Credit page, all non-voided credit sales for a customer are presented as
+one account: credited items are listed together and total credited, paid, and
+outstanding amounts are shown separately. A customer-level payment is not
+assigned to a product in the UI. `record_customer_payment()` locks that
+customer's outstanding sales oldest-first, validates against their combined
+balance, and allocates the payment in one transaction. Each sale allocation is
+still written to `sale_payments`, so existing sale balances, voiding, and
+reports continue to use the same ledger. The new nullable
+`sale_payments.payment_group_id` groups those allocation rows for the single
+payment shown in customer history. Existing rows remain NULL and are not
+backfilled or otherwise changed.
+
 ---
 
 # 8. Profit Calculation

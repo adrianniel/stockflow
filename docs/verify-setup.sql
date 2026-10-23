@@ -119,6 +119,7 @@ required_columns(table_name, column_name, migration, consequence) AS (
         ('sale_payments',    'collected_at',         '20260801121000', 'Payment dates are lost; a Day 2 collection cannot be dated'),
         ('sale_payments',    'collected_by',         '20260801121000', 'Who took the payment is unrecorded'),
         ('sale_payments',    'note',                 '20260801121000', 'Sale detail page errors'),
+        ('sale_payments',    'payment_group_id',     '20261023000100', 'Customer-level installments cannot be shown as one payment'),
 
         -- 20260801121500 — voiding a sale
         ('sales',            'voided_at',            '20260801121500', 'Sales list, sale detail and every report error 42703'),
@@ -316,6 +317,18 @@ checks AS (
             WHERE n.nspname = 'public' AND p.proname = 'record_payment'
         ),
         'apply 20260801121200 — collecting on a credit sale fails'
+
+    UNION ALL SELECT
+        'function: record_customer_payment groups FIFO allocations (20261023000100)',
+        EXISTS (
+            SELECT 1 FROM pg_proc p
+            JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = 'public'
+              AND p.proname = 'record_customer_payment'
+              AND p.prosrc LIKE '%payment_group_id%'
+              AND p.prosrc LIKE '%ORDER BY s.sale_date%'
+        ),
+        'apply 20261023000100 before deploying the consolidated customer credit UI'
 
     UNION ALL SELECT
         'index: batch reference NOT unique per product (20260801121300)',

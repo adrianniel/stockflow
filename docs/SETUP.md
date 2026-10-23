@@ -45,6 +45,9 @@ check that column. **Do not trust history. Apply the full chain in order, oldest
 first, then verify.** The files are all idempotent (`IF NOT EXISTS`,
 `DROP ... IF EXISTS`, `CREATE OR REPLACE`), so running one twice is harmless.
 
+The table is a summary; a fresh project must run **every** file in
+`supabase/migrations/` in filename order.
+
 | File | What it adds |
 |---|---|
 | `20260801120000_baseline_schema.sql` | All 8 tables, indexes, RLS helpers, baseline policies |
@@ -56,6 +59,7 @@ first, then verify.** The files are all idempotent (`IF NOT EXISTS`,
 | `20260801120600_record_sale_fifo.sql` | `record_sale()` RPC — FIFO deduction, profit, partial payment |
 | `20260801120700_account_provisioning.sql` | `users.status`, `users.email`, the 2-assistant cap, tightened policies |
 | `20260801120800_shop_status_is_platform_only.sql` | Stops an owner deactivating their own shop |
+| `20261023000100_customer_level_credit_payments.sql` | Customer-level installment allocation; additive only, leaves existing payment rows unchanged |
 
 `20260801120700` is the one that was previously blocking **every** dashboard page
 and every login: `requireSession()` selects `users.status`, so until that column
@@ -66,13 +70,19 @@ exists nothing works at all.
 1. Open **Supabase dashboard → SQL Editor → New query**.
 2. Open the oldest file — `supabase/migrations/20260801120000_baseline_schema.sql`
    — paste the whole file, click **Run**.
-3. Repeat for each of the remaining files, **in filename order** (120100 →
-   120200 → … → 120800). Each file is a separate query; the SQL editor does not
-   accept them pasted together.
+3. Repeat for each of the remaining files under `supabase/migrations/`,
+   **in filename order**. Each file is a separate query; the SQL editor does
+   not accept them pasted together.
 4. Paste and run `docs/verify-setup.sql`.
 
 Every row of the verification query should read `PASS`. Any `FAIL` row names the
 migration that is missing and what breaks while it is.
+
+For an already-running project, back it up first, run the verification query,
+and apply only migrations that are actually missing. Do not replay the whole
+history on a live database just to install a new feature. The new
+`20261023000100` migration adds a nullable column and a function; it does not
+rewrite existing payment data.
 
 Note on `20260801120200`: if the shop has already recorded sales, the file
 backfills `amount_paid` from `payment_status` before adding its constraint, so
@@ -233,3 +243,7 @@ Honest list of what is **not** covered, so none of it is a surprise later.
 - **Expense management requires migration `20260801122100_expenses.sql`.** Apply
   it only after creating a backup/export of the shared Supabase database, then
   run the verification query and test the expense and report flows.
+- **Consolidated customer credit requires migration
+  `20261023000100_customer_level_credit_payments.sql`.** It is additive and
+  does not update/backfill historical payment rows. Back up first, apply it
+  before deploying the app code, then run `docs/verify-setup.sql`.

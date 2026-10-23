@@ -331,8 +331,15 @@ The payment ledger limitation remains: original payments are marked voided and
 the replacement starts a new payment history. Refunds and overpayment handling
 are outside MVP.
 
-Credit and partial payments are recorded as separate ledger entries. A payment
-stores both the time it was received and the time it was entered. Reports use
+Credit sales for a customer appear as one consolidated credit account with one
+combined list of credited items, including each sale's date and time. A customer
+may make partial payments against the total outstanding balance without
+selecting an item or sale. The database allocates each payment to the oldest
+outstanding sale first, in one transaction, while preserving the existing
+sale-level ledger used for balances, voids, and reports. All allocation rows
+from one customer payment share a group id and display as one installment.
+
+Each payment records when it was received and when it was entered. Reports use
 the sale date for revenue and the received time for collections, so a later
 payment against an earlier sale appears on the actual collection day without
 moving the sale.

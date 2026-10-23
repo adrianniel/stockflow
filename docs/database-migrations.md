@@ -643,7 +643,7 @@ Used for:
 
 ---
 
-# Migrations 008-022 — Application Development Phase
+# Migrations 008-028 — Application Development Phase
 
 Migrations 001-007 were applied through the Supabase dashboard. From 008 onward
 they are version-controlled SQL files under `supabase/migrations/`, named by
@@ -668,6 +668,7 @@ timestamp so they apply in order.
 | 022 | `20260801121400_record_sale_explicit_batch.sql` | A sale line may name its batch; FIFO becomes the fallback |
 | 026 | `20260801121800_batch_lifecycle_protection.sql` | Protects sold-out batch history from deletion |
 | 027 | `20260801122100_expenses.sql` | Adds shop expenses with soft deletion and net-profit reporting |
+| 028 | `20261023000100_customer_level_credit_payments.sql` | Adds grouped customer-level payment allocation without rewriting historical payment rows |
 
 Each file carries its own reasoning in a header comment. The entries below cover
 the ones that changed security or business rules rather than schema shape.
@@ -1294,6 +1295,29 @@ adjustments.
 Expense deletion is implemented as a soft delete using `deleted_at` and
 `deleted_by`. Active expenses are subtracted from sales profit in dashboard,
 report, daily-detail, and PDF calculations to produce net profit.
+
+---
+
+# Migration 028 — Customer-Level Credit Payments
+
+File: `20261023000100_customer_level_credit_payments.sql`
+
+This migration only adds a nullable `sale_payments.payment_group_id`, an index,
+and the `record_customer_payment()` function. It does not update, backfill, or
+delete existing sales, customers, or payment rows; historical payment rows keep
+`payment_group_id = NULL`.
+
+The function validates the authenticated shop and role, locks all of the
+customer's live outstanding sales in a stable oldest-first order, refuses
+payments larger than the combined balance, and writes sale-level allocations
+under one group id in a single transaction. Existing payment triggers continue
+to derive each sale's `amount_paid` and `payment_status`, and reports continue to
+sum the same `sale_payments` ledger.
+
+Take a verified backup before applying this migration to production. Apply the
+single migration before deploying the application code that reads the new
+column or calls the new function. Verify the added column and function with
+`docs/verify-setup.sql`.
 
 ---
 

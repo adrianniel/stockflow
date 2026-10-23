@@ -1,24 +1,24 @@
 export const CURRENT_RELEASE = {
   /** Change this for every announcement so prior browser preferences don't carry over. */
-  id: "stockflow-2026-10-credit-sale-details",
+  id: "stockflow-2026-10-consolidated-customer-credit",
   title: "New Update in StockFlow!",
   landing: {
     intro:
-      "Hi, I’m Niel Adrian, creator of StockFlow. Credit tracking is now easier to review and follow up:",
+      "Hi, I’m Niel Adrian, creator of StockFlow. Customer credit is now easier to review and collect:",
     changes: [
-      "Review the products, quantities, and sale date and time for each outstanding customer credit.",
-      "See the original sale, payments received, and remaining balance together in one clear record.",
-      "Record multiple partial payments over time, with each collection kept in the payment history.",
+      "See all of a customer’s credited items and sale dates in one combined list.",
+      "Review the total credited, amount paid, and remaining balance together.",
+      "Take partial payments against the total; StockFlow applies them to the oldest outstanding sale first.",
     ],
     closing:
-      "Sign in and open Credit to review a customer’s outstanding sales. Thank you for using StockFlow!",
+      "Sign in, open Credit, and choose Open beside a customer. Thank you for using StockFlow!",
   },
   account: {
     intro: "What’s new?",
     changes: [
-      "Outstanding credit records now show the products and quantities, sale date and time, and staff member who recorded the sale.",
-      "See each sale’s total, payments received, remaining balance, and a direct link to its full details.",
-      "Collect a debt in multiple partial payments; every instalment stays in the sale’s payment history with its date, time, and collector.",
+      "Open a customer to see one combined list of credited products, quantities, sale date and time, and recording staff.",
+      "The account shows total credited, paid so far, and the remaining balance in one place.",
+      "Record an installment against the total balance; it is allocated oldest sale first and shown once in payment history.",
     ],
     closing: "Thank you for using StockFlow!",
   },

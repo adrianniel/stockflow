@@ -16,6 +16,7 @@ payments, customers, and reports are scoped to the authenticated shop.
 - Stock adjustments with audit reasons
 - Sales recording with manual price adjustments
 - Credit sales and partial payments
+- Consolidated customer credit balances with one item history and customer-level installments
 - Payment received-date tracking
 - Sale voiding with stock restoration
 - Sale amendments through an auditable replacement-sale workflow
@@ -89,9 +90,9 @@ Open [http://localhost:3000](http://localhost:3000).
 The complete database definition and migration history are in
 [`supabase/migrations/`](supabase/migrations/).
 
-Apply the migrations in filename order, from the baseline schema through the
-latest batch-lifecycle protection migration. The current migration chain
-includes:
+For a fresh project, apply every migration in filename order. For a live project,
+back up first, verify which migrations are missing, and apply only those—do not
+replay the entire chain. The current migration chain includes:
 
 - Core schema, indexes, RLS, and helper functions
 - Inventory and FIFO sale recording
@@ -101,6 +102,7 @@ includes:
 - Sale amendment and replacement links
 - Credit payment received-date validation
 - Batch deletion and historical-product deletion protection
+- Customer-level credit payment allocation while preserving per-sale balances
 
 After applying migrations, run [`docs/verify-setup.sql`](docs/verify-setup.sql)
 in the Supabase SQL editor. Every verification row should return `PASS`.
