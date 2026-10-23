@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { StatCard } from "@/components/dashboard/stat-card";
@@ -10,9 +11,14 @@ import { shopContextFor } from "@/lib/shop/context";
 import {
   getCustomer,
   listCustomerUnpaidSales,
+  listSaleItems,
   listSalePayments,
 } from "@/lib/shop/queries";
-import { formatCurrency, formatDate, toNumber } from "@/lib/utils/format";
+import {
+  formatCurrency,
+  formatDate,
+  toNumber,
+} from "@/lib/utils/format";
 
 import { CollectionList } from "./collection-list";
 
@@ -49,20 +55,29 @@ export default async function CustomerCreditPage({
 
   const unpaidSales = await listCustomerUnpaidSales(context, customer.id);
 
-  // One query per unsettled sale. Fine at this scale: a customer with more than
-  // a handful of open debts is a collections problem, and the alternative is a
-  // second denormalised aggregate to keep in step with the ledger.
-  const paymentsPerSale = await Promise.all(
-    unpaidSales.map((sale) => listSalePayments(context, sale.id)),
+  // Fetch each sale's instalment history and item details together. The number
+  // of open debts per customer is naturally small; avoid denormalizing a second
+  // aggregate that could drift from the sales and payment ledgers.
+  const detailsPerSale = await Promise.all(
+    unpaidSales.map(async (sale) => {
+      const [payments, items] = await Promise.all([
+        listSalePayments(context, sale.id),
+        listSaleItems(context, sale.id),
+      ]);
+
+      return { payments, items };
+    }),
   );
 
   const sales = unpaidSales.map((sale, index) => ({
     id: sale.id,
     saleDate: sale.sale_date,
+    sellerName: sale.seller_name,
     total: toNumber(sale.total_amount),
     paid: toNumber(sale.amount_paid),
     paymentStatus: sale.payment_status,
-    payments: paymentsPerSale[index],
+    payments: detailsPerSale[index].payments,
+    items: detailsPerSale[index].items,
   }));
 
   const outstanding = sales.reduce(
@@ -114,10 +129,23 @@ export default async function CustomerCreditPage({
         </Panel>
       ) : null}
 
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950">
+        <p>
+          Each record below is one unpaid sale. Product details and payment
+          history stay attached to that sale.
+        </p>
+        <Link
+          href="/dashboard/sales"
+          className="font-semibold underline decoration-blue-300 underline-offset-4 hover:decoration-blue-700"
+        >
+          Browse sales
+        </Link>
+      </div>
+
       <Panel>
         <PanelHeader
           title="Unpaid sales"
-          description="Record what the customer hands over. A payment can never exceed what is still owed on that sale."
+          description="Review the items and sale time before collecting. Record one or more payments; each is kept in this sale’s history."
           actions={
             <ButtonLink href="/dashboard/credit" variant="secondary">
               Back to credit
