@@ -331,6 +331,21 @@ checks AS (
         'apply 20261023000100 before deploying the consolidated customer credit UI'
 
     UNION ALL SELECT
+        'function: adjust_stock is atomic and not callable by anon (20261121000100)',
+        EXISTS (
+            SELECT 1 FROM pg_proc p
+            JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = 'public'
+              AND p.proname = 'adjust_stock'
+              AND p.prosecdef
+              AND p.prosrc LIKE '%FOR UPDATE%'
+              AND p.prosrc LIKE '%quantity_remaining = quantity_remaining + p_quantity_change%'
+              AND has_function_privilege('authenticated', p.oid, 'EXECUTE')
+              AND NOT has_function_privilege('anon', p.oid, 'EXECUTE')
+        ),
+        'apply 20261121000100 — stock adjustments use the non-atomic fallback and can overwrite a concurrent sale'
+
+    UNION ALL SELECT
         'index: batch reference NOT unique per product (20260801121300)',
         NOT EXISTS (
             SELECT 1 FROM pg_indexes

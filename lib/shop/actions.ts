@@ -118,14 +118,21 @@ export async function updateCategory(
       return failure("Check the highlighted field.", errors.all);
     }
 
-    const { error } = await supabase
+    const { data: changed, error } = await supabase
       .from("categories")
       .update({ name })
       .eq("id", id)
-      .eq("shop_id", shopId);
+      .eq("shop_id", shopId)
+      .select("id");
 
     if (error) {
       return databaseFailure(error, "Could not update the category.");
+    }
+
+    // Zero matched rows is not an error to PostgREST, so without this check
+    // the page would report success for a change that was never saved.
+    if (!changed || changed.length === 0) {
+      return failure("That category was not found. It may have been removed. Refresh and try again.");
     }
 
     revalidatePath("/dashboard/categories");
@@ -241,7 +248,7 @@ export async function updateProduct(
       return failure("Check the highlighted fields.", errors.all);
     }
 
-    const { error } = await supabase
+    const { data: changed, error } = await supabase
       .from("products")
       .update({
         product_name: productName,
@@ -250,10 +257,17 @@ export async function updateProduct(
         category_id: categoryId,
       })
       .eq("id", id)
-      .eq("shop_id", shopId);
+      .eq("shop_id", shopId)
+      .select("id");
 
     if (error) {
       return databaseFailure(error, "Could not update the product.");
+    }
+
+    // Zero matched rows is not an error to PostgREST, so without this check
+    // the page would report success for a change that was never saved.
+    if (!changed || changed.length === 0) {
+      return failure("That product was not found. It may have been removed. Refresh and try again.");
     }
 
     revalidatePath("/dashboard/products");
@@ -522,7 +536,7 @@ export async function updateExpense(
       return failure("Check the highlighted fields.", errors.all);
     }
 
-    const { error } = await supabase
+    const { data: changed, error } = await supabase
       .from("expenses")
       .update({
         expense_date: fields.date,
@@ -532,10 +546,17 @@ export async function updateExpense(
       })
       .eq("id", id)
       .eq("shop_id", shopId)
-      .is("deleted_at", null);
+      .is("deleted_at", null)
+      .select("id");
 
     if (error) {
       return databaseFailure(error, "Could not update the expense.");
+    }
+
+    // Zero matched rows is not an error to PostgREST, so without this check
+    // the page would report success for a change that was never saved.
+    if (!changed || changed.length === 0) {
+      return failure("That expense was not saved. It may have been deleted by someone else. Refresh and try again.");
     }
 
     revalidatePath("/dashboard/expenses");
@@ -560,15 +581,22 @@ export async function deleteExpense(
       return failure("That expense could not be found.");
     }
 
-    const { error } = await supabase
+    const { data: changed, error } = await supabase
       .from("expenses")
       .update({ deleted_at: new Date().toISOString(), deleted_by: userId })
       .eq("id", id)
       .eq("shop_id", shopId)
-      .is("deleted_at", null);
+      .is("deleted_at", null)
+      .select("id");
 
     if (error) {
       return databaseFailure(error, "Could not delete the expense.");
+    }
+
+    // Zero matched rows is not an error to PostgREST, so without this check
+    // the page would report success for a change that was never saved.
+    if (!changed || changed.length === 0) {
+      return failure("That expense was already deleted or could not be found. Refresh to see the current list.");
     }
 
     revalidatePath("/dashboard/expenses");
@@ -999,11 +1027,12 @@ export async function updateCustomer(
       return failure("Check the highlighted fields.", errors.all);
     }
 
-    const { error } = await supabase
+    const { data: changed, error } = await supabase
       .from("customers")
       .update({ name, phone, notes })
       .eq("id", id)
-      .eq("shop_id", shopId);
+      .eq("shop_id", shopId)
+      .select("id");
 
     if (error) {
       if (error.code === "23505") {
@@ -1013,6 +1042,12 @@ export async function updateCustomer(
       }
 
       return databaseFailure(error, "Could not update the customer.");
+    }
+
+    // Zero matched rows is not an error to PostgREST, so without this check
+    // the page would report success for a change that was never saved.
+    if (!changed || changed.length === 0) {
+      return failure("That customer was not found. They may have been removed. Refresh and try again.");
     }
 
     revalidatePath("/dashboard/credit");
@@ -1065,14 +1100,21 @@ export async function deleteCustomer(
       );
     }
 
-    const { error } = await supabase
+    const { data: changed, error } = await supabase
       .from("customers")
       .delete()
       .eq("id", id)
-      .eq("shop_id", shopId);
+      .eq("shop_id", shopId)
+      .select("id");
 
     if (error) {
       return databaseFailure(error, "Could not remove the customer.");
+    }
+
+    // Zero matched rows is not an error to PostgREST, so without this check
+    // the page would report success for a change that was never saved.
+    if (!changed || changed.length === 0) {
+      return failure("That customer was not found. They may already have been removed. Refresh and try again.");
     }
 
     revalidatePath("/dashboard/credit");
@@ -1366,17 +1408,102 @@ function voidMessage(result: VoidResult | null): string {
 // ---------------------------------------------------------------------------
 
 /**
+ * True when PostgREST could not find the RPC, meaning the migration that
+ * creates it has not been applied yet. PGRST202 comes from PostgREST's schema
+ * cache; 42883 comes from Postgres itself.
+ */
+function isMissingFunction(error: { code?: string }): boolean {
+  return error.code === "PGRST202" || error.code === "42883";
+}
+
+/**
+ * The pre-20261121000100 adjustment path, kept only as a fallback while
+ * adjust_stock() may be missing from the database. It is not atomic: the
+ * adjustment row and the quantity are two writes, and the quantity is written
+ * as an absolute value. adjust_stock() fixes both. Returns a failure state, or
+ * null on success.
+ */
+async function adjustStockLegacy(
+  supabase: Awaited<ReturnType<typeof getShopContext>>["supabase"],
+  {
+    shopId,
+    userId,
+    batchId,
+    quantityChange,
+    reason,
+  }: {
+    shopId: string;
+    userId: string;
+    batchId: string;
+    quantityChange: number;
+    reason: string;
+  },
+): Promise<ActionState | null> {
+  const { data: batch, error: batchError } = await supabase
+    .from("stock_batches")
+    .select("id, quantity_remaining")
+    .eq("id", batchId)
+    .eq("shop_id", shopId)
+    .maybeSingle();
+
+  if (batchError) {
+    return databaseFailure(batchError, "Could not load the batch.");
+  }
+
+  if (!batch) {
+    return failure("That batch could not be found in your shop.");
+  }
+
+  const nextQuantity = batch.quantity_remaining + quantityChange;
+
+  if (nextQuantity < 0) {
+    return failure(
+      `That would leave ${nextQuantity} units. The batch only has ${batch.quantity_remaining} on hand.`,
+      { quantity_change: "More than the batch holds." },
+    );
+  }
+
+  const { error: adjustmentError } = await supabase
+    .from("stock_adjustments")
+    .insert({
+      shop_id: shopId,
+      stock_batch_id: batchId,
+      quantity_change: quantityChange,
+      reason,
+      adjusted_by: userId,
+    });
+
+  if (adjustmentError) {
+    return databaseFailure(
+      adjustmentError,
+      "Could not record the adjustment.",
+    );
+  }
+
+  const { error: updateError } = await supabase
+    .from("stock_batches")
+    .update({ quantity_remaining: nextQuantity })
+    .eq("id", batchId)
+    .eq("shop_id", shopId);
+
+  if (updateError) {
+    return databaseFailure(
+      updateError,
+      "The adjustment was logged but the stock count did not change. Please check the batch.",
+    );
+  }
+
+  return null;
+}
+
+/**
  * Corrects a batch's remaining quantity and records why (SRS 13).
  *
- * Two writes that ought to be one transaction: the adjustment row and the new
- * quantity. PostgREST cannot express that, so the adjustment is written first —
- * if the quantity update then fails, the shop is left with a logged reason and
- * unchanged stock, which is visible and fixable. The reverse order could change
- * stock with no record of who did it or why, which is exactly what this feature
- * exists to prevent.
- *
- * A negative change cannot take a batch below zero; the check happens against
- * the freshly-read quantity here, and the column's own CHECK is the backstop.
+ * Runs through adjust_stock(), which locks the batch, applies the change
+ * relatively, and writes the audit row in one transaction. A sale made at the
+ * same moment can no longer be overwritten, and a failed change leaves no
+ * orphan audit row. The database enforces the limits: never below zero, never
+ * above what the batch received.
  */
 export async function adjustStock(
   _previous: ActionState,
@@ -1413,58 +1540,34 @@ export async function adjustStock(
       return failure("Check the highlighted fields.", errors.all);
     }
 
-    const { data: batch, error: batchError } = await supabase
-      .from("stock_batches")
-      .select("id, quantity_remaining")
-      .eq("id", batchId)
-      .eq("shop_id", shopId)
-      .maybeSingle();
+    const { error: rpcError } = await supabase.rpc("adjust_stock", {
+      p_stock_batch_id: batchId,
+      p_quantity_change: quantityChange,
+      p_reason: reason,
+    });
 
-    if (batchError) {
-      return databaseFailure(batchError, "Could not load the batch.");
+    if (rpcError && !isMissingFunction(rpcError)) {
+      // Validation messages ("That would leave -2 units...") are RAISE
+      // EXCEPTION text written for the user, so they pass through.
+      return databaseFailure(rpcError, "Could not adjust the stock.");
     }
 
-    if (!batch) {
-      return failure("That batch could not be found in your shop.");
-    }
-
-    const nextQuantity = batch.quantity_remaining + quantityChange;
-
-    if (nextQuantity < 0) {
-      return failure(
-        `That would leave ${nextQuantity} units. The batch only has ${batch.quantity_remaining} on hand.`,
-        { quantity_change: "More than the batch holds." },
-      );
-    }
-
-    const { error: adjustmentError } = await supabase
-      .from("stock_adjustments")
-      .insert({
-        shop_id: shopId,
-        stock_batch_id: batchId,
-        quantity_change: quantityChange,
+    if (rpcError) {
+      // adjust_stock() is not in the database yet (migration
+      // 20261121000100 not applied). Use the previous path so the form keeps
+      // working during a deploy in either order. Remove this fallback once
+      // the migration is confirmed live.
+      const legacyFailure = await adjustStockLegacy(supabase, {
+        shopId,
+        userId,
+        batchId,
+        quantityChange,
         reason,
-        adjusted_by: userId,
       });
 
-    if (adjustmentError) {
-      return databaseFailure(
-        adjustmentError,
-        "Could not record the adjustment.",
-      );
-    }
-
-    const { error: updateError } = await supabase
-      .from("stock_batches")
-      .update({ quantity_remaining: nextQuantity })
-      .eq("id", batchId)
-      .eq("shop_id", shopId);
-
-    if (updateError) {
-      return databaseFailure(
-        updateError,
-        "The adjustment was logged but the stock count did not change. Please check the batch.",
-      );
+      if (legacyFailure) {
+        return legacyFailure;
+      }
     }
 
     revalidatePath("/dashboard/adjustments");

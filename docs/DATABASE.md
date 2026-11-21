@@ -628,6 +628,14 @@ Examples:
 | adjusted_by     | uuid      | User responsible          |
 | created_at      | timestamp | Creation date             |
 
+Manual adjustments are written by `adjust_stock()` (migration
+`20261121000100`). In one transaction it locks the batch, inserts this row, and
+applies `quantity_remaining = quantity_remaining + quantity_change`, refusing
+results below zero or above `quantity_received`. Voids still write their own
+restore rows through `void_sale()`. For every batch, `quantity_remaining`
+should equal `quantity_received` minus all `sale_items.quantity` plus all
+`stock_adjustments.quantity_change`.
+
 ---
 
 # 5.9 expenses Table

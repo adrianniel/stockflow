@@ -7,6 +7,7 @@ import { Panel, PanelHeader } from "@/components/ui/panel";
 import { requireRole } from "@/lib/auth/guards";
 import { getDashboardIdentity } from "@/lib/dashboard/identity";
 import { shopContextFor } from "@/lib/shop/context";
+import { money } from "@/lib/shop/form";
 import {
   getCustomer,
   listCustomerCreditItems,
@@ -61,7 +62,9 @@ export default async function CustomerCreditPage({
     (total, sale) => total + toNumber(sale.amount_paid),
     0,
   );
-  const outstanding = Math.max(totalCredit - paid, 0);
+  // Rounded to cents so float residue (e.g. 1e-12) never shows a settled
+  // account as still owing.
+  const outstanding = Math.max(money(totalCredit - paid), 0);
 
   return (
     <>

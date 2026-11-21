@@ -669,6 +669,7 @@ timestamp so they apply in order.
 | 026 | `20260801121800_batch_lifecycle_protection.sql` | Protects sold-out batch history from deletion |
 | 027 | `20260801122100_expenses.sql` | Adds shop expenses with soft deletion and net-profit reporting |
 | 028 | `20261023000100_customer_level_credit_payments.sql` | Adds grouped customer-level payment allocation without rewriting historical payment rows |
+| 029 | `20261121000100_adjust_stock_atomic.sql` | Adds `adjust_stock()` so a stock correction and its audit row are one locked transaction |
 
 Each file carries its own reasoning in a header comment. The entries below cover
 the ones that changed security or business rules rather than schema shape.
@@ -1321,6 +1322,46 @@ column or calls the new function. Verify the added column and function with
 
 ---
 
+# Migration 029 — Atomic Stock Adjustment
+
+File: `20261121000100_adjust_stock_atomic.sql`
+
+This migration only creates the `adjust_stock(p_stock_batch_id,
+p_quantity_change, p_reason)` function. It changes no table, column,
+constraint, policy, trigger, or existing function, and it updates no existing
+row. Execute permission goes to `authenticated` only, not `anon`.
+
+Why it exists: the Adjust Stock form used to read `quantity_remaining`, insert
+the `stock_adjustments` row, then write back an absolute quantity computed in
+the app, all as separate unlocked calls. A sale made between the read and the
+write was overwritten, so sold units came back as stock. When the final write
+failed, for example by exceeding `quantity_received`, the audit row stayed
+behind with no stock change. Three live batches show these effects. Their
+counts are left as they are, for the owner to correct with a normal
+adjustment after a physical count.
+
+The function checks that the caller is an active OWNER of the batch's shop. It
+locks the batch with `FOR UPDATE` (the same lock `record_sale()` and
+`void_sale()` take), refuses results below zero or above `quantity_received`,
+inserts the audit row, and applies the change relatively, all in one
+transaction.
+
+It was tested on a disposable local database against seeded shops, sales,
+payments and a legacy adjustment. Every existing row, policy, trigger and
+function hashed the same before and after. The tests covered success and
+rejection for below zero, above received, an assistant, an inactive owner, a
+cross-shop batch, a zero change, a blank or long reason, no session, and
+`anon`. A sale held open in another transaction made the adjustment wait and
+then apply to the post-sale quantity.
+
+The app calls `adjust_stock()`. If PostgREST reports the function missing
+(`PGRST202`/`42883`), it falls back to the previous two-write path, so the app
+and the migration can be deployed in either order. Back up, apply this single
+migration, and confirm with `docs/verify-setup.sql`. Then the fallback in
+`lib/shop/actions.ts` can be removed.
+
+---
+
 # Future Migration Guidelines
 
 All future database changes must:
@@ -1338,5 +1379,5 @@ All future database changes must:
 Current Version:
 
 ```
-StockFlow Database v1.4
+StockFlow Database v1.5
 ```

@@ -13,7 +13,7 @@ payments, customers, and reports are scoped to the authenticated shop.
 - Batch-based inventory receiving
 - Historical batch references and pricing
 - FIFO inventory deduction with explicit batch selection
-- Stock adjustments with audit reasons
+- Stock adjustments with audit reasons, applied atomically with the stock change
 - Sales recording with manual price adjustments
 - Credit sales and partial payments
 - Consolidated customer credit balances with one item history and customer-level installments

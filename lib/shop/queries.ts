@@ -1,6 +1,9 @@
 import { formatCurrency, formatDateKey, toNumber } from "@/lib/utils/format";
 
+import { fetchAllRows } from "@/lib/supabase/fetch-all-rows";
+
 import type { ShopContext } from "./context";
+import { money } from "./form";
 import type {
   Category,
   Customer,
@@ -113,10 +116,13 @@ export async function listProducts({
   supabase,
   shopId,
 }: ShopContext): Promise<ProductWithCategory[]> {
-  const { data, error } = await supabase
-    .from("products")
-    .select(
-      `
+  // Paged: a catalogue past 1000 products would otherwise lose every product
+  // after the 1000th alphabetically, with no error.
+  const data = await fetchAllRows<ProductRow>((from, to) =>
+    supabase
+      .from("products")
+      .select(
+        `
       id,
       product_name,
       brand,
@@ -125,15 +131,14 @@ export async function listProducts({
       created_at,
       categories ( name )
     `,
-    )
-    .eq("shop_id", shopId)
-    .order("product_name");
+      )
+      .eq("shop_id", shopId)
+      .order("product_name")
+      .order("id")
+      .range(from, to),
+  );
 
-  if (error) {
-    throw error;
-  }
-
-  return ((data ?? []) as ProductRow[]).map((row) => ({
+  return data.map((row) => ({
     id: row.id,
     product_name: row.product_name,
     brand: row.brand,
@@ -249,12 +254,17 @@ export async function listInventory(
 ): Promise<InventoryLine[]> {
   const { supabase, shopId } = context;
 
-  const [products, batchesResult] = await Promise.all([
+  // Batches are never deleted, so this list only grows. Paged so the newest
+  // arrivals don't drop out of inventory and the till once a shop passes 1000
+  // batches. The trailing `id` keeps page boundaries stable without changing
+  // the FIFO order.
+  const [products, batches] = await Promise.all([
     listProducts(context),
-    supabase
-      .from("stock_batches")
-      .select(
-        `
+    fetchAllRows<InventoryBatchRow>((from, to) =>
+      supabase
+        .from("stock_batches")
+        .select(
+          `
         id,
         product_id,
         batch_number,
@@ -264,17 +274,14 @@ export async function listInventory(
         received_date,
         created_at
       `,
-      )
-      .eq("shop_id", shopId)
-      .order("received_date")
-      .order("created_at"),
+        )
+        .eq("shop_id", shopId)
+        .order("received_date")
+        .order("created_at")
+        .order("id")
+        .range(from, to),
+    ),
   ]);
-
-  if (batchesResult.error) {
-    throw batchesResult.error;
-  }
-
-  const batches = (batchesResult.data ?? []) as InventoryBatchRow[];
   const byProduct = new Map<string, InventoryBatchRow[]>();
 
   for (const batch of batches) {
@@ -545,17 +552,15 @@ export async function listCustomers({
   supabase,
   shopId,
 }: ShopContext): Promise<Customer[]> {
-  const { data, error } = await supabase
-    .from("customers")
-    .select(CUSTOMER_SELECT)
-    .eq("shop_id", shopId)
-    .order("name");
-
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []) as Customer[];
+  return fetchAllRows<Customer>((from, to) =>
+    supabase
+      .from("customers")
+      .select(CUSTOMER_SELECT)
+      .eq("shop_id", shopId)
+      .order("name")
+      .order("id")
+      .range(from, to),
+  );
 }
 
 export async function getCustomer(
@@ -602,32 +607,32 @@ export async function listCustomersWithBalances(
 ): Promise<CustomerWithBalance[]> {
   const { supabase, shopId } = context;
 
-  const [customers, unpaid] = await Promise.all([
+  const [customers, unpaidRows] = await Promise.all([
     listCustomers(context),
-    supabase
-      .from("sales")
-      .select("id, customer_id, total_amount, amount_paid, sale_date")
-      .eq("shop_id", shopId)
-      .not("customer_id", "is", null)
-      .neq("payment_status", "PAID")
-      // Voiding a credit sale marks its payments voided, which drops
-      // amount_paid to 0 and payment_status to CREDIT — the exact shape of an
-      // uncollected debt. Without this filter a cancelled sale would go on
-      // being chased, and for its full value.
-      .is("voided_at", null)
-      .order("sale_date"),
+    fetchAllRows<UnpaidSaleRow>((from, to) =>
+      supabase
+        .from("sales")
+        .select("id, customer_id, total_amount, amount_paid, sale_date")
+        .eq("shop_id", shopId)
+        .not("customer_id", "is", null)
+        .neq("payment_status", "PAID")
+        // Voiding a credit sale marks its payments voided, which drops
+        // amount_paid to 0 and payment_status to CREDIT — the exact shape of an
+        // uncollected debt. Without this filter a cancelled sale would go on
+        // being chased, and for its full value.
+        .is("voided_at", null)
+        .order("sale_date")
+        .order("id")
+        .range(from, to),
+    ),
   ]);
-
-  if (unpaid.error) {
-    throw unpaid.error;
-  }
 
   const balances = new Map<
     string,
     { outstanding: number; count: number; oldest: string | null }
   >();
 
-  for (const row of (unpaid.data ?? []) as UnpaidSaleRow[]) {
+  for (const row of unpaidRows) {
     if (!row.customer_id) {
       continue;
     }
@@ -653,7 +658,10 @@ export async function listCustomersWithBalances(
 
     return {
       ...customer,
-      outstanding: entry?.outstanding ?? 0,
+      // Rounded to cents: summing decimal amounts as floats can leave a
+      // remainder like 1e-12, which would read as "still owes" on a settled
+      // account.
+      outstanding: money(entry?.outstanding ?? 0),
       unpaidSaleCount: entry?.count ?? 0,
       oldestUnpaidDate: entry?.oldest ?? null,
     };

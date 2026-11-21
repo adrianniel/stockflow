@@ -1,3 +1,5 @@
+import { fetchAllRows } from "@/lib/supabase/fetch-all-rows";
+
 import type { ShopContext } from "./context";
 import {
   addDays,
@@ -108,6 +110,15 @@ type PaymentRow = {
   }>;
 };
 
+type ExpenseRow = {
+  id: string;
+  expense_date: string;
+  name: string;
+  amount: string;
+  notes: string | null;
+  users: Embedded<{ name: string | null }>;
+};
+
 function one<T>(value: Embedded<T>): T | null {
   return Array.isArray(value) ? value[0] ?? null : value;
 }
@@ -129,8 +140,16 @@ export function parseExportRange(
     return makeRange("daily", day, addDays(day, 1), "Daily");
   }
 
+  // Week and month boundaries come from the shop's calendar date (Manila), not
+  // the server clock. `today` is Manila midnight, which is 16:00 UTC the day
+  // before, so reading it with getDay()/getMonth() on a UTC server (Vercel)
+  // returned the previous day: the week started on Tuesday and, on the 1st,
+  // "This month" covered the whole previous month.
+  const todayKey = dateKey(now);
+
   if (period === "week") {
-    const dayOfWeek = today.getDay();
+    const [year, month, day] = todayKey.split("-").map(Number);
+    const dayOfWeek = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
     const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
     const from = addDays(today, -daysSinceMonday);
 
@@ -138,7 +157,7 @@ export function parseExportRange(
   }
 
   if (period === "month") {
-    const from = new Date(today.getFullYear(), today.getMonth(), 1);
+    const from = parseDateKey(`${todayKey.slice(0, 7)}-01`) as Date;
 
     return makeRange("month", from, addDays(today, 1), "This month");
   }
@@ -166,11 +185,15 @@ export async function getSalesExportData(
   { supabase, shopId }: ShopContext,
   range: ExportRange,
 ): Promise<SalesExportData> {
-  const [salesResult, paymentsResult, expensesResult] = await Promise.all([
-    supabase
-      .from("sales")
-      .select(
-        `
+  // Each list is paged so a busy period's PDF includes every row. A single
+  // request stops at 1000 rows without an error, which would make the export
+  // quietly under-report revenue, profit, and collections.
+  const [saleRows, paymentRows, expenseRows] = await Promise.all([
+    fetchAllRows<SaleRow>((from, to) =>
+      supabase
+        .from("sales")
+        .select(
+          `
         id,
         sale_date,
         total_amount,
@@ -185,16 +208,20 @@ export async function getSalesExportData(
           stock_batches ( products ( product_name ) )
         )
       `,
-      )
-      .eq("shop_id", shopId)
-      .gte("sale_date", range.from.toISOString())
-      .lt("sale_date", range.to.toISOString())
-      .is("voided_at", null)
-      .order("sale_date", { ascending: false }),
-    supabase
-      .from("sale_payments")
-      .select(
-        `
+        )
+        .eq("shop_id", shopId)
+        .gte("sale_date", range.from.toISOString())
+        .lt("sale_date", range.to.toISOString())
+        .is("voided_at", null)
+        .order("sale_date", { ascending: false })
+        .order("id")
+        .range(from, to),
+    ),
+    fetchAllRows<PaymentRow>((from, to) =>
+      supabase
+        .from("sale_payments")
+        .select(
+          `
         id,
         amount,
         collected_at,
@@ -202,36 +229,31 @@ export async function getSalesExportData(
         users ( name ),
         sales!inner ( id, sale_date, customers ( name ) )
       `,
-      )
-      .eq("shop_id", shopId)
-      .gte("collected_at", range.from.toISOString())
-      .lt("collected_at", range.to.toISOString())
-      .is("voided_at", null)
-      .is("sales.voided_at", null)
-      .order("collected_at", { ascending: false }),
-    supabase
-      .from("expenses")
-      .select("id, expense_date, name, amount, notes, users!expenses_created_by_fkey ( name )")
-      .eq("shop_id", shopId)
-      .gte("expense_date", range.fromKey)
-      .lte("expense_date", range.toKey)
-      .is("deleted_at", null)
-      .order("expense_date", { ascending: false }),
+        )
+        .eq("shop_id", shopId)
+        .gte("collected_at", range.from.toISOString())
+        .lt("collected_at", range.to.toISOString())
+        .is("voided_at", null)
+        .is("sales.voided_at", null)
+        .order("collected_at", { ascending: false })
+        .order("id")
+        .range(from, to),
+    ),
+    fetchAllRows<ExpenseRow>((from, to) =>
+      supabase
+        .from("expenses")
+        .select("id, expense_date, name, amount, notes, users!expenses_created_by_fkey ( name )")
+        .eq("shop_id", shopId)
+        .gte("expense_date", range.fromKey)
+        .lte("expense_date", range.toKey)
+        .is("deleted_at", null)
+        .order("expense_date", { ascending: false })
+        .order("id")
+        .range(from, to),
+    ),
   ]);
 
-  if (salesResult.error) {
-    throw salesResult.error;
-  }
-
-  if (paymentsResult.error) {
-    throw paymentsResult.error;
-  }
-
-  if (expensesResult.error) {
-    throw expensesResult.error;
-  }
-
-  const sales = ((salesResult.data ?? []) as SaleRow[]).map((row) => {
+  const sales = saleRows.map((row) => {
     const items = (row.sale_items ?? []).map((item) => {
       const quantity = item.quantity;
       const sellingPrice = toNumber(item.actual_selling_price);
@@ -262,7 +284,7 @@ export async function getSalesExportData(
     };
   });
 
-  const collections = ((paymentsResult.data ?? []) as PaymentRow[]).map((row) => {
+  const collections = paymentRows.map((row) => {
     const sale = one(row.sales);
 
     return {
@@ -288,14 +310,7 @@ export async function getSalesExportData(
     }
   }
 
-  const expenses = ((expensesResult.data ?? []) as Array<{
-    id: string;
-    expense_date: string;
-    name: string;
-    amount: string;
-    notes: string | null;
-    users: Embedded<{ name: string | null }>;
-  }>).map((expense) => ({
+  const expenses = expenseRows.map((expense) => ({
     id: expense.id,
     date: expense.expense_date,
     name: expense.name,

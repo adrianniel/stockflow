@@ -60,6 +60,7 @@ The table is a summary; a fresh project must run **every** file in
 | `20260801120700_account_provisioning.sql` | `users.status`, `users.email`, the 2-assistant cap, tightened policies |
 | `20260801120800_shop_status_is_platform_only.sql` | Stops an owner deactivating their own shop |
 | `20261023000100_customer_level_credit_payments.sql` | Customer-level installment allocation; additive only, leaves existing payment rows unchanged |
+| `20261121000100_adjust_stock_atomic.sql` | `adjust_stock()` RPC: stock correction and audit row in one locked transaction; additive only, touches no existing row |
 
 `20260801120700` is the one that was previously blocking **every** dashboard page
 and every login: `requireSession()` selects `users.status`, so until that column
@@ -254,3 +255,8 @@ Honest list of what is **not** covered, so none of it is a surprise later.
   `20261023000100_customer_level_credit_payments.sql`.** It is additive and
   does not update/backfill historical payment rows. Back up first, apply it
   before deploying the app code, then run `docs/verify-setup.sql`.
+- **Atomic stock adjustment uses migration
+  `20261121000100_adjust_stock_atomic.sql`.** It only adds a function. Until it
+  is applied, the app falls back to the old non-atomic adjustment path, so
+  either deploy order works. Back up, apply it, run `docs/verify-setup.sql`,
+  and then the fallback can be removed.

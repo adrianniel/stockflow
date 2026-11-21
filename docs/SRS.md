@@ -503,6 +503,11 @@ Each adjustment must store:
 - Date
 - User who made the adjustment
 
+An adjustment and its stock change must succeed or fail together. It applies to
+the batch's current quantity, so a sale made at the same moment is never
+undone. It may not take a batch below zero, or above the quantity that batch
+originally received.
+
 ---
 
 # 14. MVP Scope

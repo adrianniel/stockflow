@@ -1,3 +1,4 @@
+import { fetchAllRows } from "@/lib/supabase/fetch-all-rows";
 import { toNumber } from "@/lib/utils/format";
 import { LOW_STOCK_THRESHOLD } from "./inventory-status";
 
@@ -387,7 +388,7 @@ export async function getDashboardSummary(
   const { supabase, shopId } = context;
   const todayStart = startOfDay(new Date());
 
-  const [todaySales, todayPayments, todayExpenses, productsResult, batchesResult] =
+  const [todaySales, todayPayments, todayExpenses, productsResult, batches] =
     await Promise.all([
       loadSales(context, todayStart, addDays(todayStart, 1)),
       loadPayments(context, todayStart, addDays(todayStart, 1)),
@@ -396,25 +397,25 @@ export async function getDashboardSummary(
         .from("products")
         .select("id", { count: "exact", head: true })
         .eq("shop_id", shopId),
-      supabase
-        .from("stock_batches")
-        .select("product_id, quantity_remaining, capital_price")
-        .eq("shop_id", shopId),
+      // Paged so stock value and on-hand counts stay complete past 1000
+      // batches instead of silently reading low.
+      fetchAllRows<{
+        product_id: string;
+        quantity_remaining: number;
+        capital_price: string;
+      }>((from, to) =>
+        supabase
+          .from("stock_batches")
+          .select("product_id, quantity_remaining, capital_price")
+          .eq("shop_id", shopId)
+          .order("id")
+          .range(from, to),
+      ),
     ]);
 
   if (productsResult.error) {
     throw productsResult.error;
   }
-
-  if (batchesResult.error) {
-    throw batchesResult.error;
-  }
-
-  const batches = (batchesResult.data ?? []) as Array<{
-    product_id: string;
-    quantity_remaining: number;
-    capital_price: string;
-  }>;
 
   let quantityOnHand = 0;
   let stockValue = 0;
@@ -480,7 +481,11 @@ export async function getProfitReport(
 
   // "Last 7 days" includes today, so it starts 6 days back.
   const weekStart = addDays(todayStart, -6);
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  // The 1st of the current month at Manila midnight. Built from the shop's
+  // calendar date, not the server clock: on Vercel (UTC) the old
+  // `new Date(y, m, 1)` started at 08:00 Manila and, early on the 1st, picked
+  // the previous month.
+  const monthStart = parseDateKey(`${dateKey(now).slice(0, 7)}-01`) as Date;
 
   const [rows, payments, expenses] = await Promise.all([
     loadSales(context, range.from, range.to, range.filter),
