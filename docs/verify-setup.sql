@@ -120,6 +120,7 @@ required_columns(table_name, column_name, migration, consequence) AS (
         ('sale_payments',    'collected_by',         '20260801121000', 'Who took the payment is unrecorded'),
         ('sale_payments',    'note',                 '20260801121000', 'Sale detail page errors'),
         ('sale_payments',    'payment_group_id',     '20261023000100', 'Customer-level installments cannot be shown as one payment'),
+        ('sales',            'client_request_id',    '20261122000100', 'Duplicate till submissions cannot be detected'),
 
         -- 20260801121500 — voiding a sale
         ('sales',            'voided_at',            '20260801121500', 'Sales list, sale detail and every report error 42703'),
@@ -344,6 +345,27 @@ checks AS (
               AND NOT has_function_privilege('anon', p.oid, 'EXECUTE')
         ),
         'apply 20261121000100 — stock adjustments use the non-atomic fallback and can overwrite a concurrent sale'
+
+    UNION ALL SELECT
+        'function: record_sale_once deduplicates till submissions (20261122000100)',
+        EXISTS (
+            SELECT 1 FROM pg_proc p
+            JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = 'public'
+              AND p.proname = 'record_sale_once'
+              AND p.prosecdef
+              AND p.prosrc LIKE '%pg_advisory_xact_lock%'
+              AND p.prosrc LIKE '%client_request_id = p_client_request_id%'
+              AND has_function_privilege('authenticated', p.oid, 'EXECUTE')
+              AND NOT has_function_privilege('anon', p.oid, 'EXECUTE')
+        )
+        AND EXISTS (
+            SELECT 1 FROM pg_indexes
+            WHERE schemaname = 'public'
+              AND indexname = 'sales_shop_client_request_key'
+              AND indexdef LIKE '%UNIQUE%'
+        ),
+        'apply 20261122000100 — a retried sale submission can be recorded twice'
 
     UNION ALL SELECT
         'index: batch reference NOT unique per product (20260801121300)',

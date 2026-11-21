@@ -502,7 +502,14 @@ A single sale can contain multiple products and multiple stock batches.
 | voided_by      | uuid      | Owner who cancelled it |
 | void_reason    | text      | Why it was cancelled   |
 | replaces_sale_id | uuid    | Original sale replaced by this amendment |
+| client_request_id | uuid   | Till's per-submission id; NULL for older sales (20261122000100) |
 | created_at     | timestamp | Creation date          |
+
+`client_request_id` makes recording idempotent. `record_sale_once()` records
+a sale only when no sale in the shop already carries that id. Otherwise it
+returns the existing sale and writes nothing. A partial unique index on
+`(shop_id, client_request_id) WHERE client_request_id IS NOT NULL` is the
+backstop. Historical rows stay NULL and are never backfilled.
 
 A live sale has `voided_at IS NULL`. That predicate is what every report filters
 on, so it is the single fact that decides whether a sale counts.

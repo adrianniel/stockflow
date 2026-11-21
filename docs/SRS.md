@@ -291,6 +291,10 @@ The system must allow users to:
 - Adjust actual selling price
 - Save sales transaction
 
+Saving must be idempotent: a till submission that reaches the server more than
+once, for example a retry after a lost response on a slow connection, records
+the sale only once. The retry gets back the sale that was already recorded.
+
 ---
 
 ## Voiding a Recorded Sale

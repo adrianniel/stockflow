@@ -670,6 +670,7 @@ timestamp so they apply in order.
 | 027 | `20260801122100_expenses.sql` | Adds shop expenses with soft deletion and net-profit reporting |
 | 028 | `20261023000100_customer_level_credit_payments.sql` | Adds grouped customer-level payment allocation without rewriting historical payment rows |
 | 029 | `20261121000100_adjust_stock_atomic.sql` | Adds `adjust_stock()` so a stock correction and its audit row are one locked transaction |
+| 030 | `20261122000100_idempotent_record_sale.sql` | Adds `record_sale_once()` and `sales.client_request_id` so a retried till submission is recorded once |
 
 Each file carries its own reasoning in a header comment. The entries below cover
 the ones that changed security or business rules rather than schema shape.
@@ -1362,6 +1363,59 @@ migration, and confirm with `docs/verify-setup.sql`. Then the fallback in
 
 ---
 
+# Migration 030 — Idempotent Sale Recording
+
+File: `20261122000100_idempotent_record_sale.sql`
+
+Problem: on a slow connection a sale could commit while the response never
+reached the phone. The cashier tapped Record Sale again, and the sale was
+recorded twice: double stock deduction, double revenue, and double credit for
+the customer.
+
+What the migration adds, and nothing more:
+
+- `sales.client_request_id uuid`: nullable with no default, a catalog-only
+  change. Existing rows stay NULL and are not backfilled.
+- Partial unique index `sales_shop_client_request_key` on
+  `(shop_id, client_request_id) WHERE client_request_id IS NOT NULL`. It
+  starts empty.
+- `record_sale_once(p_client_request_id, p_items, p_payment_status,
+  p_amount_paid, p_customer_id) RETURNS jsonb {sale_id, duplicate}`. It takes
+  a transaction advisory lock on shop plus request id, then returns the
+  existing sale if one carries that id. Otherwise it calls the **unchanged**
+  `record_sale()` and tags the new row. Execute permission goes to
+  `authenticated` only.
+
+`record_sale()`, every policy, every trigger, and every existing row are
+unchanged.
+
+Testing on a disposable local database:
+
+- Data and policy hashes, and the `record_sale` body, were identical before
+  and after the migration.
+- A retry returned the same sale and wrote nothing.
+- A credit-sale retry did not double the customer's balance.
+- A request id reused by another shop stayed independent.
+- After an out-of-stock failure nothing was tagged, and a later retry with
+  the same id succeeded.
+- A null id and a missing session were rejected. `anon` has no execute.
+- The old `record_sale()` still works.
+- Two simultaneous submissions with the same id produced one sale: the
+  second waited, then received `duplicate: true`.
+- The ledger invariants held.
+
+App side:
+
+- The till (`app/dashboard/sales/new/sale-composer.tsx`) draws a new random
+  id whenever the cart, payment status, or customer changes, so an edited
+  cart is never mistaken for a retry.
+- `recordSale` calls `record_sale_once()` and falls back to `record_sale()`
+  if the function is missing.
+- A deduplicated retry shows "This sale was already recorded".
+- Amendments still use `amend_sale()` without a request id.
+
+---
+
 # Future Migration Guidelines
 
 All future database changes must:
@@ -1379,5 +1433,5 @@ All future database changes must:
 Current Version:
 
 ```
-StockFlow Database v1.5
+StockFlow Database v1.6
 ```

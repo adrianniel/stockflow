@@ -81,6 +81,27 @@ export function SaleComposer({
   const [customerId, setCustomerId] = useState(initialCustomerId);
   const [state, formAction] = useActionState(action, IDLE);
 
+  // One random request id per cart. It is sent with the sale so that if the
+  // same submission reaches the server twice (the response was lost on a slow
+  // connection and the cashier tapped Record again), the second copy returns
+  // the sale already recorded instead of recording it again.
+  //
+  // A new id is drawn whenever the cart, payment status, or customer changes.
+  // An edited cart is a different sale and must not be mistaken for a retry.
+  // It starts empty so server and client render the same markup; a cart can
+  // only be submitted after a line is added, which draws the first id.
+  const cartKey = JSON.stringify([lines, paymentStatus, customerId]);
+  const [request, setRequest] = useState({ key: cartKey, id: "" });
+
+  if (mode === "new" && request.key !== cartKey) {
+    // randomUUID needs a secure context (HTTPS or localhost). Without it the
+    // field is simply omitted and the sale is recorded the old way.
+    setRequest({
+      key: cartKey,
+      id: typeof crypto.randomUUID === "function" ? crypto.randomUUID() : "",
+    });
+  }
+
   // Cleared after a successful sale so the next customer starts fresh.
   //
   // Done during render rather than in an effect. `useActionState` hands back a
@@ -210,6 +231,9 @@ export function SaleComposer({
       {/* The cart travels as one JSON field: its length varies, and the server
           parses and re-validates every entry regardless of what arrives. */}
       <input type="hidden" name="items" value={JSON.stringify(lines)} />
+      {mode === "new" && request.id ? (
+        <input type="hidden" name="client_request_id" value={request.id} />
+      ) : null}
       <input type="hidden" name="payment_status" value={paymentStatus} />
       {/* Only sent for credit and partial: a cash walk-in has no customer, and
           sending a stale id after switching back to Paid would attach a debtor

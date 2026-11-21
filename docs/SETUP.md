@@ -60,6 +60,7 @@ The table is a summary; a fresh project must run **every** file in
 | `20260801120700_account_provisioning.sql` | `users.status`, `users.email`, the 2-assistant cap, tightened policies |
 | `20260801120800_shop_status_is_platform_only.sql` | Stops an owner deactivating their own shop |
 | `20261023000100_customer_level_credit_payments.sql` | Customer-level installment allocation; additive only, leaves existing payment rows unchanged |
+| `20261122000100_idempotent_record_sale.sql` | `record_sale_once()` + nullable `sales.client_request_id`: a retried till submission is recorded once; additive only, existing rows stay NULL |
 | `20261121000100_adjust_stock_atomic.sql` | `adjust_stock()` RPC: stock correction and audit row in one locked transaction; additive only, touches no existing row |
 
 `20260801120700` is the one that was previously blocking **every** dashboard page
@@ -260,3 +261,8 @@ Honest list of what is **not** covered, so none of it is a surprise later.
   is applied, the app falls back to the old non-atomic adjustment path, so
   either deploy order works. Back up, apply it, run `docs/verify-setup.sql`,
   and then the fallback can be removed.
+- **Duplicate-sale protection uses migration
+  `20261122000100_idempotent_record_sale.sql`.** It adds a nullable column, a
+  partial unique index, and a new function. `record_sale()` is unchanged.
+  Until it is applied, the till falls back to plain `record_sale()`, so either
+  deploy order works.
