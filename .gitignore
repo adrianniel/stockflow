@@ -42,3 +42,16 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 backup-before-credit.sql
+
+# AI docs / instructions
+KNOWLEDGE.md
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+AGENTS.md
+GEMINI.md
+.cursor/
+.cursorrules
+.github/copilot-instructions.md
+.windsurfrules
+.codex/
