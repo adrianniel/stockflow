@@ -121,6 +121,8 @@ required_columns(table_name, column_name, migration, consequence) AS (
         ('sale_payments',    'note',                 '20260801121000', 'Sale detail page errors'),
         ('sale_payments',    'payment_group_id',     '20261023000100', 'Customer-level installments cannot be shown as one payment'),
         ('sales',            'client_request_id',    '20261122000100', 'Duplicate till submissions cannot be detected'),
+        ('sale_payments',    'client_request_id',    '20261122000200', 'Duplicate customer payments cannot be detected'),
+        ('expense_history',  'old_values',           '20261122000300', 'The Expenses page change history fails to load'),
 
         -- 20260801121500 — voiding a sale
         ('sales',            'voided_at',            '20260801121500', 'Sales list, sale detail and every report error 42703'),
@@ -366,6 +368,38 @@ checks AS (
               AND indexdef LIKE '%UNIQUE%'
         ),
         'apply 20261122000100 — a retried sale submission can be recorded twice'
+
+    UNION ALL SELECT
+        'function: record_customer_payment_once deduplicates payments (20261122000200)',
+        EXISTS (
+            SELECT 1 FROM pg_proc p
+            JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = 'public'
+              AND p.proname = 'record_customer_payment_once'
+              AND p.prosecdef
+              AND p.prosrc LIKE '%pg_advisory_xact_lock%'
+              AND has_function_privilege('authenticated', p.oid, 'EXECUTE')
+              AND NOT has_function_privilege('anon', p.oid, 'EXECUTE')
+        ),
+        'apply 20261122000200 — a retried customer payment can be credited twice'
+
+    UNION ALL SELECT
+        'trigger: expense edits are recorded in expense_history (20261122000300)',
+        EXISTS (
+            SELECT 1 FROM pg_trigger
+            WHERE tgrelid = 'public.expenses'::regclass
+              AND tgname = 'expenses_record_history'
+              AND NOT tgisinternal
+        )
+        AND EXISTS (
+            SELECT 1 FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'public' AND c.relname = 'expense_history'
+              AND c.relrowsecurity
+        )
+        AND NOT has_table_privilege('authenticated', 'public.expense_history', 'INSERT')
+        AND NOT has_table_privilege('anon', 'public.expense_history', 'SELECT'),
+        'apply 20261122000300 — expense edits leave no history, or history is writable through the API'
 
     UNION ALL SELECT
         'index: batch reference NOT unique per product (20260801121300)',

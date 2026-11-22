@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,39 @@ export function CollectionList({
   const [state, formAction] = useActionState(recordCustomerPayment, IDLE);
   const [showHistory, setShowHistory] = useState(false);
   const [collectedAt, setCollectedAt] = useState(() => toDateTimeLocal(new Date()));
+
+  // One random request id per payment. It is drawn on the first submit and
+  // kept until that payment succeeds, so a retry after a lost response (slow
+  // connection) sends the same id and the server returns the payment already
+  // recorded instead of crediting the customer twice.
+  const [requestId, setRequestId] = useState("");
+  const requestInput = useRef<HTMLInputElement>(null);
+  const [handledState, setHandledState] = useState(state);
+
+  if (state !== handledState) {
+    setHandledState(state);
+
+    if (state.status === "success") {
+      setRequestId("");
+    }
+  }
+
+  function attachRequestId() {
+    let id = requestId;
+
+    // randomUUID needs a secure context (HTTPS or localhost). Without it the
+    // payment is recorded the old way, without duplicate protection.
+    if (id === "" && typeof crypto.randomUUID === "function") {
+      id = crypto.randomUUID();
+      setRequestId(id);
+    }
+
+    // Written straight to the DOM so it is in the FormData React builds for
+    // this very submit, before the state update renders.
+    if (requestInput.current) {
+      requestInput.current.value = id;
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -121,8 +154,14 @@ export function CollectionList({
         </div>
 
         {outstanding > 0 ? (
-          <form action={formAction} className="space-y-3">
+          <form action={formAction} onSubmit={attachRequestId} className="space-y-3">
             <input type="hidden" name="customer_id" value={customerId} />
+            <input
+              ref={requestInput}
+              type="hidden"
+              name="client_request_id"
+              defaultValue=""
+            />
             <input
               type="hidden"
               name="collected_at"

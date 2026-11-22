@@ -60,6 +60,8 @@ The table is a summary; a fresh project must run **every** file in
 | `20260801120700_account_provisioning.sql` | `users.status`, `users.email`, the 2-assistant cap, tightened policies |
 | `20260801120800_shop_status_is_platform_only.sql` | Stops an owner deactivating their own shop |
 | `20261023000100_customer_level_credit_payments.sql` | Customer-level installment allocation; additive only, leaves existing payment rows unchanged |
+| `20261122000200_idempotent_customer_payment.sql` | `record_customer_payment_once()` + nullable `sale_payments.client_request_id`; additive only |
+| `20261122000300_expense_history.sql` | Append-only `expense_history` table and trigger; additive only, no existing row changed |
 | `20261122000100_idempotent_record_sale.sql` | `record_sale_once()` + nullable `sales.client_request_id`: a retried till submission is recorded once; additive only, existing rows stay NULL |
 | `20261121000100_adjust_stock_atomic.sql` | `adjust_stock()` RPC: stock correction and audit row in one locked transaction; additive only, touches no existing row |
 
@@ -259,10 +261,15 @@ Honest list of what is **not** covered, so none of it is a surprise later.
 - **Atomic stock adjustment uses migration
   `20261121000100_adjust_stock_atomic.sql`.** It only adds a function. Until it
   is applied, the app falls back to the old non-atomic adjustment path, so
-  either deploy order works. Back up, apply it, run `docs/verify-setup.sql`,
-  and then the fallback can be removed.
+  The app's fallback was removed after the migration was confirmed live.
 - **Duplicate-sale protection uses migration
   `20261122000100_idempotent_record_sale.sql`.** It adds a nullable column, a
   partial unique index, and a new function. `record_sale()` is unchanged.
-  Until it is applied, the till falls back to plain `record_sale()`, so either
-  deploy order works.
+  The till calls `record_sale_once()` directly; the deploy-order fallback was
+  removed once the migration was live.
+- **Duplicate-payment protection and expense history use migrations
+  `20261122000200_idempotent_customer_payment.sql` and
+  `20261122000300_expense_history.sql`.** Both are additive. The app has
+  **no fallback** for them, so apply both migrations and confirm
+  `docs/verify-setup.sql` passes **before** deploying the app code that calls
+  `record_customer_payment_once()` or reads `expense_history`.

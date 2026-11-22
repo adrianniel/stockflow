@@ -28,17 +28,6 @@ import type { PaymentStatus } from "./types";
  * reported as one rather than clamped.
  */
 
-/**
- * Ceiling on rows fetched for one aggregate.
- *
- * PostgREST caps responses at `max_rows` (1000, supabase/config.toml) and gives
- * no signal that it did. Asking for one more row than we intend to allow turns
- * that silent truncation into something detectable: if a query comes back at
- * this length, the range held more data than the aggregation can see and the
- * caller throws rather than reporting a total that is quietly too low.
- */
-const ROW_CEILING = 900;
-
 export type SalesSummary = {
   saleCount: number;
   itemCount: number;
@@ -196,69 +185,37 @@ async function loadSales(
   to: Date,
   filter: SaleFilter = "all",
 ): Promise<SaleAggregateRow[]> {
-  let query = supabase
-    .from("sales")
-    .select(
-      `
-      id,
-      total_amount,
-      total_profit,
-      amount_paid,
-      payment_status,
-      sale_date,
-      sale_items ( quantity )
-    `,
-    )
-    .eq("shop_id", shopId)
-    .gte("sale_date", from.toISOString())
-    .lt("sale_date", to.toISOString())
-    // A voided sale is not a sale. It contributes no revenue, no cost and no
-    // profit, and the units it moved have gone back to their batches.
-    .is("voided_at", null);
+  // Paged so a busy range is totalled completely instead of failing.
+  return fetchAllRows<SaleAggregateRow>((start, end) => {
+    let query = supabase
+      .from("sales")
+      .select(
+        `
+        id,
+        total_amount,
+        total_profit,
+        amount_paid,
+        payment_status,
+        sale_date,
+        sale_items ( quantity )
+      `,
+      )
+      .eq("shop_id", shopId)
+      .gte("sale_date", from.toISOString())
+      .lt("sale_date", to.toISOString())
+      // A voided sale is not a sale. It contributes no revenue, no cost and no
+      // profit, and the units it moved have gone back to their batches.
+      .is("voided_at", null);
 
-  if (filter !== "all") {
-    query = query.eq("payment_status", filter);
-  }
+    if (filter !== "all") {
+      query = query.eq("payment_status", filter);
+    }
 
-  const { data, error } = await query
-    .order("sale_date", { ascending: false })
-    .limit(ROW_CEILING);
-
-  if (error) {
-    throw error;
-  }
-
-  const rows = (data ?? []) as SaleAggregateRow[];
-
-  assertNotTruncated(rows.length, "sales", from, to);
-
-  return rows;
-}
-
-/**
- * Fails loudly when a result may have been cut short.
- *
- * Every figure on the reports page is summed from rows fetched here, so a
- * truncated result does not produce a visibly broken page — it produces a
- * plausible one with totals that are too low. That is the worst outcome
- * available: an owner reconciling a drawer against an under-reported total has
- * no way to tell the report is wrong. Throwing surfaces it as an error boundary
- * instead, which is recoverable by narrowing the range.
- */
-function assertNotTruncated(
-  count: number,
-  what: string,
-  from: Date,
-  to: Date,
-): void {
-  if (count < ROW_CEILING) {
-    return;
-  }
-
-  throw new Error(
-    `Too many ${what} between ${dateKey(from)} and ${dateKey(to)} to total accurately ` +
-      `(${ROW_CEILING}+ rows). Choose a shorter date range.`,
-  );
+    return query
+      .order("sale_date", { ascending: false })
+      .order("id")
+      .range(start, end);
+  });
 }
 
 type PaymentAggregateRow = {
@@ -286,26 +243,19 @@ async function loadPayments(
   from: Date,
   to: Date,
 ): Promise<PaymentAggregateRow[]> {
-  const { data, error } = await supabase
-    .from("sale_payments")
-    .select("amount, collected_at")
-    .eq("shop_id", shopId)
-    .gte("collected_at", from.toISOString())
-    .lt("collected_at", to.toISOString())
-    // Payments of a voided sale are kept on the sale for history but are not
-    // cash the shop is holding, so they leave the collection figure with it.
-    .is("voided_at", null)
-    .limit(ROW_CEILING);
-
-  if (error) {
-    throw error;
-  }
-
-  const rows = (data ?? []) as PaymentAggregateRow[];
-
-  assertNotTruncated(rows.length, "payments", from, to);
-
-  return rows;
+  return fetchAllRows<PaymentAggregateRow>((start, end) =>
+    supabase
+      .from("sale_payments")
+      .select("amount, collected_at")
+      .eq("shop_id", shopId)
+      .gte("collected_at", from.toISOString())
+      .lt("collected_at", to.toISOString())
+      // Payments of a voided sale are kept on the sale for history but are not
+      // cash the shop is holding, so they leave the collection figure with it.
+      .is("voided_at", null)
+      .order("id")
+      .range(start, end),
+  );
 }
 
 function sumPayments(rows: PaymentAggregateRow[]): number {
@@ -357,23 +307,18 @@ async function loadExpenses(
   from: Date,
   to: Date,
 ): Promise<ExpenseAggregateRow[]> {
-  const { data, error } = await supabase
-    .from("expenses")
-    .select("id, expense_date, name, amount, notes, users!expenses_created_by_fkey ( name )")
-    .eq("shop_id", shopId)
-    .gte("expense_date", dateKey(from))
-    .lt("expense_date", dateKey(to))
-    .is("deleted_at", null)
-    .order("expense_date", { ascending: false })
-    .limit(ROW_CEILING);
-
-  if (error) {
-    throw error;
-  }
-
-  const rows = (data ?? []) as ExpenseAggregateRow[];
-  assertNotTruncated(rows.length, "expenses", from, to);
-  return rows;
+  return fetchAllRows<ExpenseAggregateRow>((start, end) =>
+    supabase
+      .from("expenses")
+      .select("id, expense_date, name, amount, notes, users!expenses_created_by_fkey ( name )")
+      .eq("shop_id", shopId)
+      .gte("expense_date", dateKey(from))
+      .lt("expense_date", dateKey(to))
+      .is("deleted_at", null)
+      .order("expense_date", { ascending: false })
+      .order("id")
+      .range(start, end),
+  );
 }
 
 /**
@@ -663,77 +608,66 @@ export async function getDayDetail(
 
   const to = addDays(from, 1);
 
-  const [salesResult, paymentsResult, expensesResult] = await Promise.all([
-    supabase
-      .from("sales")
-      .select(
-        `
-        id,
-        total_amount,
-        total_profit,
-        amount_paid,
-        payment_status,
-        sale_date,
-        replaces_sale_id,
-        users!sales_sold_by_fkey ( name ),
-        customers ( name ),
-        sale_items ( quantity )
-      `,
-      )
-      .eq("shop_id", shopId)
-      .gte("sale_date", from.toISOString())
-      .lt("sale_date", to.toISOString())
-      .is("voided_at", null)
-      .order("sale_date", { ascending: false })
-      .limit(ROW_CEILING),
-    supabase
-      .from("sale_payments")
-      .select(
-        `
-        id,
-        sale_id,
-        amount,
-        collected_at,
-        note,
-        users ( name ),
-        sales ( sale_date, customers ( name ) )
-      `,
-      )
-      .eq("shop_id", shopId)
-      .gte("collected_at", from.toISOString())
-      .lt("collected_at", to.toISOString())
-      .is("voided_at", null)
-      .order("collected_at", { ascending: false })
-      .limit(ROW_CEILING),
-    supabase
-      .from("expenses")
-      .select("id, expense_date, name, amount, notes, users!expenses_created_by_fkey ( name )")
-      .eq("shop_id", shopId)
-      .eq("expense_date", key)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false })
-      .limit(ROW_CEILING),
+  const [saleRows, paymentRows, expenseRows] = await Promise.all([
+    fetchAllRows<DaySaleRow>((start, end) =>
+      supabase
+        .from("sales")
+        .select(
+          `
+          id,
+          total_amount,
+          total_profit,
+          amount_paid,
+          payment_status,
+          sale_date,
+          replaces_sale_id,
+          users!sales_sold_by_fkey ( name ),
+          customers ( name ),
+          sale_items ( quantity )
+        `,
+        )
+        .eq("shop_id", shopId)
+        .gte("sale_date", from.toISOString())
+        .lt("sale_date", to.toISOString())
+        .is("voided_at", null)
+        .order("sale_date", { ascending: false })
+        .order("id")
+        .range(start, end),
+    ),
+    fetchAllRows<DayPaymentRow>((start, end) =>
+      supabase
+        .from("sale_payments")
+        .select(
+          `
+          id,
+          sale_id,
+          amount,
+          collected_at,
+          note,
+          users ( name ),
+          sales ( sale_date, customers ( name ) )
+        `,
+        )
+        .eq("shop_id", shopId)
+        .gte("collected_at", from.toISOString())
+        .lt("collected_at", to.toISOString())
+        .is("voided_at", null)
+        .order("collected_at", { ascending: false })
+        .order("id")
+        .range(start, end),
+    ),
+    fetchAllRows<ExpenseAggregateRow>((start, end) =>
+      supabase
+        .from("expenses")
+        .select("id, expense_date, name, amount, notes, users!expenses_created_by_fkey ( name )")
+        .eq("shop_id", shopId)
+        .eq("expense_date", key)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
+        .order("id")
+        .range(start, end),
+    ),
   ]);
-
-  if (salesResult.error) {
-    throw salesResult.error;
-  }
-
-  if (paymentsResult.error) {
-    throw paymentsResult.error;
-  }
-
-  if (expensesResult.error) {
-    throw expensesResult.error;
-  }
-
-  const saleRows = (salesResult.data ?? []) as DaySaleRow[];
-  const paymentRows = (paymentsResult.data ?? []) as DayPaymentRow[];
-  const expenseRows = (expensesResult.data ?? []) as ExpenseAggregateRow[];
-
-  assertNotTruncated(saleRows.length, "sales", from, to);
-  assertNotTruncated(paymentRows.length, "payments", from, to);
-  assertNotTruncated(expenseRows.length, "expenses", from, to);
 
   const sales: DaySale[] = saleRows.map((row) => {
     const total = toNumber(row.total_amount);
@@ -835,37 +769,31 @@ async function getTopProducts(
   from: Date,
   to: Date,
 ): Promise<ProfitReport["topProducts"]> {
-  const { data, error } = await supabase
-    .from("sale_items")
-    .select(
-      `
-      quantity,
-      actual_selling_price,
-      profit,
-      sales!inner ( shop_id, sale_date, voided_at ),
-      stock_batches (
-        products ( product_name )
+  // Paged: one sale contributes a row per line, so busy ranges pass 1000
+  // lines quickly, and a truncated ranking would look plausible but be wrong.
+  const rows = await fetchAllRows<TopProductRow>((start, end) =>
+      supabase
+      .from("sale_items")
+      .select(
+        `
+        quantity,
+        actual_selling_price,
+        profit,
+        sales!inner ( shop_id, sale_date, voided_at ),
+        stock_batches (
+          products ( product_name )
+        )
+      `,
       )
-    `,
-    )
-    .eq("sales.shop_id", shopId)
-    .gte("sales.sale_date", from.toISOString())
-    .lt("sales.sale_date", to.toISOString())
-    // Filtered through the join rather than on sale_items, which has no void
-    // of its own — the line is cancelled because its sale is.
-    .is("sales.voided_at", null)
-    .limit(ROW_CEILING);
-
-  if (error) {
-    throw error;
-  }
-
-  const rows = (data ?? []) as TopProductRow[];
-
-  // One sale contributes a row per line, so this ceiling is reached sooner than
-  // the sales one. Same reasoning: a truncated ranking is a wrong ranking, and
-  // it would not look wrong.
-  assertNotTruncated(rows.length, "sale items", from, to);
+      .eq("sales.shop_id", shopId)
+      .gte("sales.sale_date", from.toISOString())
+      .lt("sales.sale_date", to.toISOString())
+      // Filtered through the join rather than on sale_items, which has no void
+      // of its own — the line is cancelled because its sale is.
+      .is("sales.voided_at", null)
+      .order("id")
+      .range(start, end),
+  );
 
   const totals = new Map<
     string,

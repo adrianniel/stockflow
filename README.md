@@ -14,7 +14,8 @@ payments, customers, and reports are scoped to the authenticated shop.
 - Historical batch references and pricing
 - FIFO inventory deduction with explicit batch selection
 - Stock adjustments with audit reasons, applied atomically with the stock change
-- Sales recording with manual price adjustments and duplicate-submission protection
+- Sales recording with manual price adjustments and duplicate-submission protection (sales and customer payments)
+- Expense change history (who edited or deleted what, with previous values)
 - Credit sales and partial payments
 - Consolidated customer credit balances with one item history and customer-level installments
 - Payment received-date tracking

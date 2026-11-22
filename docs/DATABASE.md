@@ -671,6 +671,22 @@ a past cost can be entered without changing the date of a sale.
 Only active expenses (`deleted_at IS NULL`) reduce net profit. Both OWNER and
 ASSISTANT users may record, edit, and soft-delete expenses in their own shop.
 
+## expense_history (migration 20261122000300)
+
+`expense_history` is an append-only log. The `expenses_record_history`
+trigger (AFTER UPDATE, SECURITY DEFINER) writes one row whenever `name`,
+`amount`, `expense_date`, `notes`, or `deleted_at` changes. Each row has:
+
+- `action`: EDIT, DELETE, or RESTORE.
+- `old_values` and `new_values`: jsonb snapshots of those fields.
+- `changed_by`, pointing to users.
+- `changed_at`.
+
+Owners and assistants of the shop can SELECT it. Nobody can insert, update,
+or delete through the API: there are no write policies, and write privileges
+are revoked. Expenses that existed before the migration have no history
+rows.
+
 ```
 Net profit = Sales profit - Active expenses
 ```
@@ -773,6 +789,14 @@ reports continue to use the same ledger. The new nullable
 `sale_payments.payment_group_id` groups those allocation rows for the single
 payment shown in customer history. Existing rows remain NULL and are not
 backfilled or otherwise changed.
+
+`sale_payments.client_request_id` (migration 20261122000200, nullable, with a
+partial non-unique index) carries the payment form's per-submission id.
+`record_customer_payment_once()` takes an advisory lock on shop plus id. If any
+allocation row already has that id, it returns the existing
+`payment_group_id`. Otherwise it calls the unchanged
+`record_customer_payment()` and tags only the rows it just created.
+Historical rows stay NULL.
 
 ---
 

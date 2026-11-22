@@ -1,5 +1,5 @@
 import type { ShopContext } from "./context";
-import type { Expense } from "./types";
+import type { Expense, ExpenseHistoryEntry } from "./types";
 
 type ExpenseRow = {
   id: string;
@@ -56,5 +56,36 @@ export async function listExpenses(
     created_at: row.created_at,
     updated_at: row.updated_at,
     created_by_name: first(row.users)?.name ?? null,
+  }));
+}
+
+type ExpenseHistoryRow = Omit<ExpenseHistoryEntry, "changed_by_name"> & {
+  users: { name: string | null } | { name: string | null }[] | null;
+};
+
+/**
+ * The most recent changes to the shop's expenses: edits, deletions and
+ * restores, newest first. Written only by the expenses_record_history trigger.
+ */
+export async function listExpenseHistory(
+  { supabase, shopId }: ShopContext,
+  limit = 50,
+): Promise<ExpenseHistoryEntry[]> {
+  const { data, error } = await supabase
+    .from("expense_history")
+    .select(
+      "id, expense_id, action, old_values, new_values, changed_at, users!expense_history_changed_by_fkey ( name )",
+    )
+    .eq("shop_id", shopId)
+    .order("changed_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw error;
+  }
+
+  return ((data ?? []) as ExpenseHistoryRow[]).map(({ users, ...row }) => ({
+    ...row,
+    changed_by_name: first(users)?.name ?? null,
   }));
 }

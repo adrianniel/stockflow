@@ -671,6 +671,8 @@ timestamp so they apply in order.
 | 028 | `20261023000100_customer_level_credit_payments.sql` | Adds grouped customer-level payment allocation without rewriting historical payment rows |
 | 029 | `20261121000100_adjust_stock_atomic.sql` | Adds `adjust_stock()` so a stock correction and its audit row are one locked transaction |
 | 030 | `20261122000100_idempotent_record_sale.sql` | Adds `record_sale_once()` and `sales.client_request_id` so a retried till submission is recorded once |
+| 031 | `20261122000200_idempotent_customer_payment.sql` | Adds `record_customer_payment_once()` and `sale_payments.client_request_id` so a retried customer payment is credited once |
+| 032 | `20261122000300_expense_history.sql` | Adds the append-only `expense_history` log, written by a trigger on expense edits |
 
 Each file carries its own reasoning in a header comment. The entries below cover
 the ones that changed security or business rules rather than schema shape.
@@ -1416,6 +1418,66 @@ App side:
 
 ---
 
+# Migration 031 — Idempotent Customer Payments
+
+File: `20261122000200_idempotent_customer_payment.sql`
+
+This is the same pattern as Migration 030, applied to customer installments.
+
+It adds:
+
+- A nullable `sale_payments.client_request_id`. It is shared by every
+  allocation row of one payment, so the index is non-unique.
+- A partial index on that column.
+- `record_customer_payment_once(p_client_request_id, p_customer_id, p_amount,
+  p_collected_at, p_note) RETURNS jsonb {payment_group_id, duplicate}`.
+  It takes an advisory lock on shop plus id, returns the existing group if
+  the id was seen, and otherwise calls the unchanged
+  `record_customer_payment()`. It then tags only the rows just inserted,
+  matched by their fresh `payment_group_id`.
+
+`record_customer_payment()`, `record_payment()`, every policy, every
+trigger, and every existing row are unchanged.
+
+The payment form (`app/dashboard/credit/[customerId]/collection-list.tsx`)
+draws a request id on the first submit. It keeps that id until the payment
+succeeds, so a retry reuses it.
+
+# Migration 032 — Expense Change History
+
+File: `20261122000300_expense_history.sql`
+
+It adds:
+
+- An append-only `expense_history` table.
+- An `expenses_record_history` AFTER UPDATE trigger that fires only when
+  `name`, `amount`, `expense_date`, `notes`, or `deleted_at` changes. It
+  records EDIT, DELETE, or RESTORE with old and new values and the acting
+  user.
+
+RLS lets the shop's owners and assistants read the history. API write
+privileges are revoked, so only the trigger writes rows. The assistants'
+expense workflow is unchanged; the change is now traceable instead of
+restricted. No existing expense row is modified, and history starts with the
+first change after the migration. The Expenses page shows the latest 50
+entries.
+
+Testing for Migrations 031 and 032 was done on a disposable local database:
+
+- Data, policy, trigger, and function hashes were identical before and after.
+- A payment retry wrote nothing.
+- A 200 payment spanning two sales produced 2 rows under one id.
+- An overpayment failure left no tag, and a retry succeeded.
+- Cross-shop calls and a null id were rejected. `anon` has no execute.
+- The old function still works.
+- Two simultaneous identical payments produced 1 row.
+- An expense edit and a soft delete were logged with the right user. An
+  `updated_at`-only touch was not logged.
+- Direct insert, update, and delete on `expense_history` were refused.
+- Another shop sees nothing.
+
+---
+
 # Future Migration Guidelines
 
 All future database changes must:
@@ -1433,5 +1495,5 @@ All future database changes must:
 Current Version:
 
 ```
-StockFlow Database v1.6
+StockFlow Database v1.7
 ```

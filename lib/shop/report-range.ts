@@ -13,15 +13,12 @@
 /**
  * The longest range the reports page will aggregate.
  *
- * This is not a UI preference, it is a correctness limit. Sales are summed in
- * Node from rows fetched through PostgREST, which caps responses at `max_rows`
- * (1000, set in supabase/config.toml). A range wide enough to exceed that would
- * not error — it would silently return a truncated set and report totals that
- * are quietly too low. Capping the range keeps the row count comfortably under
- * that ceiling for a small shop; loadSales() also asserts it was not truncated,
- * so if this assumption is ever wrong the page fails loudly instead of lying.
+ * Sales, payments and expenses are summed in Node from rows read through
+ * PostgREST. Those reads are paged (lib/supabase/fetch-all-rows.ts), so a busy
+ * range is totalled completely rather than truncated at 1000 rows. The cap
+ * keeps each report to a bounded number of pages.
  *
- * 92 days covers a full quarter, which is the longest window these reports are
+ * 92 days covers a full quarter, the longest window these reports are
  * meaningfully used for. Anything longer wants SQL-side aggregation.
  */
 export const MAX_RANGE_DAYS = 92;

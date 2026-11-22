@@ -148,6 +148,26 @@ export type Expense = {
   created_by_name: string | null;
 };
 
+/** The tracked fields of an expense, as captured before or after a change. */
+export type ExpenseSnapshot = {
+  expense_date: string | null;
+  name: string | null;
+  amount: string | number | null;
+  notes: string | null;
+  deleted_at: string | null;
+};
+
+/** One entry of the append-only expense change log (migration 20261122000300). */
+export type ExpenseHistoryEntry = {
+  id: string;
+  expense_id: string;
+  action: "EDIT" | "DELETE" | "RESTORE";
+  old_values: ExpenseSnapshot;
+  new_values: ExpenseSnapshot;
+  changed_at: string;
+  changed_by_name: string | null;
+};
+
 /**
  * A named credit customer.
  *

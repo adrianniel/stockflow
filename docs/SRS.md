@@ -342,6 +342,9 @@ selecting an item or sale. The database allocates each payment to the oldest
 outstanding sale first, in one transaction, while preserving the existing
 sale-level ledger used for balances, voids, and reports. All allocation rows
 from one customer payment share a group id and display as one installment.
+Recording a customer payment is idempotent. A submission that reaches the
+server twice, for example a retry after a lost response, credits the customer
+only once.
 
 Each payment records when it was received and when it was entered. Reports use
 the sale date for revenue and the received time for collections, so a later
@@ -549,7 +552,10 @@ Possible future features:
 Expense management beyond the MVP may later include expense categories,
 recurring expenses, suppliers, and attachment support. The MVP supports
 recording shop expenses against today or a past date, editing them, and soft
-deleting mistakes. Active expenses reduce the day's net profit.
+deleting mistakes. Active expenses reduce the day's net profit. Every edit,
+deletion, and restore of an expense is recorded in a read-only change history,
+with the previous values, who changed it, and when. The history is shown on
+the Expenses page.
 
 - Expense tracking
 - Advanced financial reports

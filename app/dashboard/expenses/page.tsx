@@ -2,9 +2,10 @@ import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { Panel } from "@/components/ui/panel";
 import { requireRole } from "@/lib/auth/guards";
 import { getDashboardIdentity } from "@/lib/dashboard/identity";
-import { listExpenses } from "@/lib/shop/expense-queries";
+import { listExpenseHistory, listExpenses } from "@/lib/shop/expense-queries";
 import { shopContextFor } from "@/lib/shop/context";
 
+import { ExpenseHistory } from "./expense-history";
 import { ExpenseManager } from "./expense-manager";
 
 export const metadata = { title: "Expenses" };
@@ -15,7 +16,10 @@ export default async function ExpensesPage() {
     getDashboardIdentity(profile),
     shopContextFor(profile),
   ]);
-  const expenses = await listExpenses(context);
+  const [expenses, history] = await Promise.all([
+    listExpenses(context),
+    listExpenseHistory(context),
+  ]);
 
   return (
     <>
@@ -30,6 +34,10 @@ export default async function ExpensesPage() {
 
       <Panel>
         <ExpenseManager expenses={expenses} />
+      </Panel>
+
+      <Panel>
+        <ExpenseHistory entries={history} />
       </Panel>
     </>
   );
